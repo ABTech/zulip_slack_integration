@@ -1,0 +1,2 @@
+slackclient==2.0.0
+zulip==0.6.0
