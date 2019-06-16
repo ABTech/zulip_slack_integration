@@ -2,13 +2,15 @@ import os
 import slack
 import zulip
 import threading
-import .secrets
+from secrets import (PUBLIC_TWO_WAY, ZULIP_BOT_NAME, ZULIP_BOT_EMAIL,
+                      ZULIP_API_KEY, ZULIP_URL, ZULIP_STREAM, ZULIP_PUBLIC,
+                      SLACK_BOT_ID, SLACK_TOKEN)
 
 slack_users = dict()
 slack_channels = dict()
 
 def send_to_slack(msg):
-    if msg['subject'] in secrets.PUBLIC_TWO_WAY and msg['sender_short_name'] != secrets.ZULIP_BOT_NAME:
+    if msg['subject'] in PUBLIC_TWO_WAY and msg['sender_short_name'] != ZULIP_BOT_NAME:
         web_client.chat_postMessage(
             channel=msg['subject'],
             text='**' + msg['sender_full_name'] + "**: " + msg['content']
@@ -18,7 +20,7 @@ def send_to_slack(msg):
 def run_zulip_listener():
     client.call_on_each_message(send_to_slack)
 
-client = zulip.Client(email=ZULIP_BOT_EMAIL, api_key=secrets.ZULIP_API_KEY, site=secrets.ZULIP_URL)
+client = zulip.Client(email=ZULIP_BOT_EMAIL, api_key=ZULIP_API_KEY, site=ZULIP_URL)
 t = threading.Thread(target=run_zulip_listener)
 t.setDaemon(True)
 t.start()
@@ -52,9 +54,9 @@ def send_to_zulip(subject, user, msg, send_public=False):
 #            message_text = '[%s](%s)\n' % (caption, attachment['url'])
 #            break
 
-    to = secrets.ZULIP_STREAM
+    to = ZULIP_STREAM
     if send_public:
-        to = secrets.ZULIP_PUBLIC
+        to = ZULIP_PUBLIC
     client.send_message({
         "type": 'stream',
         "to": to,
@@ -79,7 +81,7 @@ def receive_slack_msg(**payload):
     channel = slack_channels[channel_id]
     user = slack_users[user_id]
     msg = data['text']
-    if (user_id != secrets.SLACK_BOT_ID):
+    if (user_id != SLACK_BOT_ID):
 #        if 'files' in data:
 #            for file in data['files']:
 #                web_client.files_sharedPublicURL(id=file['id'])
@@ -87,13 +89,13 @@ def receive_slack_msg(**payload):
 #                    msg = file['permalink_public']
 #                else:
 #                    msg += '\n' + file['permalink_public']
-        if channel == secrets.ZULIP_PUBLIC:
+        if channel == ZULIP_PUBLIC:
             send_to_zulip(channel, user, msg, send_public=True)
         else:
             send_to_zulip(channel, user, msg)
 
 
 #slack_token = os.environ["SLACK_API_TOKEN"]
-rtm_client = slack.RTMClient(token=secrets.SLACK_TOKEN)
-web_client = slack.WebClient(token=secrets.SLACK_TOKEN)
+rtm_client = slack.RTMClient(token=SLACK_TOKEN)
+web_client = slack.WebClient(token=SLACK_TOKEN)
 rtm_client.start()
