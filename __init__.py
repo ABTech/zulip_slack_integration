@@ -145,7 +145,9 @@ class ZulipSlack():
                     data['text'] += '**#' + ref_channel + '**'
                     data['text'] += old_text[start + len(match):]
                     channel_shift = len(data['text']) - len(old_text)
-                if channel['type'] == 'channel':
+
+                if (channel['type'] == 'channel' or
+                    channel['type'] == 'private-channel'):
                     msg = data['text']
                     channel_name = channel['name']
                     msg_id = data['client_msg_id']
@@ -316,6 +318,12 @@ my records to use your new name when I forward messages to Zulip for you.",
                     ret_channel = {
                         'type': 'im',
                         'user_id': channel['user']
+                    }
+                elif ('is_group' in channel and channel['is_group'] and
+                      'is_mpim' in channel and not channel['is_mpim']):
+                    ret_channel = {
+                        'type': 'private-channel',
+                        'name': channel['name']
                     }
                 elif 'is_group' in channel and channel['is_group']:
                     ret_channel = {
