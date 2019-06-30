@@ -24,6 +24,13 @@ REDIS_MSG_SLACK_TO_ZULIP = {
     ZULIP_PUBLIC: REDIS_PREFIX + ':msg.slack.to.zulip.pub:'
 }
 
+GROUP_UPDATES = ['channel_archive', 'channel_join', 'channel_leave',
+                 'channel_name', 'channel_purpose', 'channel_topic',
+                 'channel_unarchive', 'file_comment', 'file_mention',
+                 'group_archive', 'group_join', 'group_leave', 'group_name',
+                 'group_purpose', 'group_topic', 'group_unarchive',
+                 'pinned_item', 'unpinned_item']
+
 LOGLEVEL = os.environ.get('LOGLEVEL', 'INFO').upper()
 logging.basicConfig(level=LOGLEVEL)
 
@@ -85,6 +92,7 @@ class ZulipSlack():
                 edit = False
                 delete = False
                 hide_public = False
+                me = False
                 if 'subtype' in data and data['subtype'] == 'bot_message':
                     bot_id = data['bot_id']
                     user_id = await self.get_slack_bot(bot_id,
@@ -169,9 +177,15 @@ class ZulipSlack():
                     msg = data['text']
                     channel_name = channel['name']
                     if ('subtype' in data and
-                        data['subtype'] == 'group_topic'):
+                        data['subtype'] in GROUP_UPDATES):
                         msg_id = None
                         user = None
+                    elif ('subtype' in data and
+                        data['subtype'] == 'me_message'):
+                        msg_id = None
+                        me = True
+                        if 'edited' in data:
+                            edit = True
                     else:
                         msg_id = data['client_msg_id']
             #        if 'files' in data:
@@ -184,10 +198,10 @@ class ZulipSlack():
                     if channel_name in PUBLIC_TWO_WAY and not hide_public:
                         self.send_to_zulip(channel_name, msg, user=user,
                                            send_public=True, slack_id=msg_id,
-                                           edit=edit, delete=delete)
+                                           edit=edit, delete=delete, me=me)
                     self.send_to_zulip(channel_name, msg, user=user,
                                        slack_id=msg_id, edit=edit,
-                                       delete=delete)
+                                       delete=delete, me=me)
                 elif channel['type'] == 'im':
                     _LOGGER.debug('updating user display name')
                     user = await self.get_slack_user(user_id,
@@ -372,7 +386,7 @@ my records to use your new name when I forward messages to Zulip for you.",
 
     # originally from https://github.com/ABTech/zulip_groupme_integration/blob/7674a3595282ce154cd24b1903a44873d729e0cc/server.py
     def send_to_zulip(self, subject, msg, user=None, slack_id=None,
-                      send_public=False, edit=False, delete=False):
+                      send_public=False, edit=False, delete=False, me=False):
         _LOGGER.debug('sending to zulip, public: %s', str(send_public))
         try:
             # Check for image
@@ -386,8 +400,10 @@ my records to use your new name when I forward messages to Zulip for you.",
             sent = dict()
             zulip_id = None
             user_prefix = ''
-            if user is not None:
+            if user is not None and not me:
                 user_prefix = '**' + user + '**: '
+            elif user is not None and me:
+                user_prefix = '**' + user + '** '
             to = ZULIP_STREAM
             if send_public:
                 to = ZULIP_PUBLIC
@@ -401,6 +417,16 @@ my records to use your new name when I forward messages to Zulip for you.",
                     })
                 elif not send_public:
                     sent = self.zulip_client.send_message({
+                        "type": 'stream',
+                        "to": to,
+                        "subject": subject,
+                        "content": user_prefix + msg + ' *(edited)*'
+                    })
+            elif edit and not slack_id and send_public:
+                # don't publish me_message edits publically
+                pass
+            elif edit and not slack_id and not send_public:
+                sent = self.zulip_client.send_message({
                         "type": 'stream',
                         "to": to,
                         "subject": subject,
