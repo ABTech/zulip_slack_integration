@@ -69,7 +69,8 @@ class ZulipSlack():
                 hide_public = False
                 if 'subtype' in data and data['subtype'] == 'bot_message':
                     bot_id = data['bot_id']
-                    user_id = await self.get_slack_bot(bot_id, web_client=web_client)
+                    user_id = await self.get_slack_bot(bot_id,
+                                                       web_client=web_client)
                     if not user_id:
                         return
                     if user_id == SLACK_BOT_ID:
@@ -91,7 +92,8 @@ class ZulipSlack():
                     user_id = data['user']
                 channel_id = data['channel']
                 thread_ts = data['ts']
-                user = await self.get_slack_user(user_id, web_client=web_client)
+                user = await self.get_slack_user(user_id,
+                                                 web_client=web_client)
                 if not user:
                     return
                 channel = await self.get_slack_channel(channel_id,
@@ -163,7 +165,8 @@ class ZulipSlack():
                                        delete=delete)
                 elif channel['type'] == 'im':
                     _LOGGER.debug('updating user display name')
-                    user = await self.get_slack_user(user_id, web_client=web_client,
+                    user = await self.get_slack_user(user_id,
+                                                     web_client=web_client,
                                                force_update=True)
                     await self.slack_web_client.chat_postMessage(
                         channel=channel_id,
@@ -224,6 +227,28 @@ be annoying.",
 #    def run_zulip_ev(self):
 #        self.zulip_client.call_on_each_event(lambda event: sys.stdout.write(str(event) + "\n"))
 
+    async def new_slack_user(self, user_id, user, web_client=None):
+        if web_client is None:
+            web_client = self.slack_web_client
+        res = await web_client.im_open(user=user_id)
+        if not res['ok']:
+            _LOGGER.error('could not user im %s, %s', user_id, repr(res))
+            return
+        channel = res['channel']['id']
+        await web_client.chat_postMessage(
+            channel=channel,
+            text="Hi " + user + ", welcome to the AB Tech Slack!",
+            mrkdwn=True
+        )
+        await web_client.chat_postMessage(
+            channel=channel,
+            text="My job here is to forward messages to and from Zulip. Your \
+name is now seen on Zulip as: *" + user + "*. If you update your name on \
+Slack, respond here with _literally anything_ at any time and I'll update \
+my records to use your new name when I forward messages to Zulip for you.",
+            mrkdwn=True
+        )
+
     async def get_slack_bot(self, bot_id, web_client=None, force_update=False):
         redis_key = REDIS_BOTS + bot_id
         ret_bot = self.redis.get(redis_key)
@@ -241,7 +266,8 @@ be annoying.",
                 self.redis.set(redis_key, ret_bot)
         return ret_bot
 
-    async def get_slack_user(self, user_id, web_client=None, force_update=False):
+    async def get_slack_user(self, user_id, web_client=None,
+                             force_update=False):
         redis_key = REDIS_USERS + user_id
         ret_user = self.redis.get(redis_key)
         if ret_user is None or force_update:
@@ -260,6 +286,9 @@ be annoying.",
                 else:
                     ret_user = user['profile']['display_name']
                 self.redis.set(redis_key, ret_user)
+                if not force_update:
+                    await self.new_slack_user(user_id, ret_user,
+                                              web_client=web_client)
         return ret_user
 
     async def get_slack_channel(self, channel_id, web_client=None,
