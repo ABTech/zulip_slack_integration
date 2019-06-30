@@ -14,7 +14,7 @@ from secrets import (PUBLIC_TWO_WAY, ZULIP_BOT_NAME, ZULIP_BOT_EMAIL,
                       ZULIP_API_KEY, ZULIP_URL, ZULIP_STREAM, ZULIP_PUBLIC,
                       SLACK_BOT_ID, SLACK_TOKEN, REDIS_HOSTNAME, REDIS_PORT,
                       REDIS_PASSWORD, SLACK_EDIT_UPDATE_ZULIP_TTL,
-                      REDIS_PREFIX)
+                      REDIS_PREFIX, SLACK_ERR_CHANNEL)
 
 REDIS_USERS = REDIS_PREFIX + ':users:'
 REDIS_BOTS = REDIS_PREFIX + ':bots:'
@@ -28,6 +28,24 @@ LOGLEVEL = os.environ.get('LOGLEVEL', 'INFO').upper()
 logging.basicConfig(level=LOGLEVEL)
 
 _LOGGER = logging.getLogger(__name__)
+
+class SlackHandler(logging.StreamHandler):
+    def __init__(self, web_client, event_loop, channel_id):
+        super().__init__(self)
+        self.web_client = web_client
+        self.event_loop = event_loop
+        self.channel_id = channel_id
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            asyncio.ensure_future(self.web_client.chat_postMessage(
+                channel=self.channel_id,
+                text="Oopsie! " + msg,
+                mrkdwn=False
+            ), loop=self.event_loop)
+        except Exception as e:
+            print('could not post err to slack %s', repr(e))
 
 class ZulipSlack():
     def __init__(self):
@@ -186,10 +204,12 @@ be annoying.",
             except:
                 e = sys.exc_info()
                 exc_type, exc_value, exc_traceback = e
-                _LOGGER.error('Error receive slack message: %s',
+                _LOGGER.error('Error receive slack message: %s, %s',
                               repr(traceback.format_exception(exc_type,
                                                               exc_value,
-                                                              exc_traceback)))
+                                                              exc_traceback)),
+                              data)
+
 
         _LOGGER.debug('connecting to slack')
         self.slack_loop = asyncio.new_event_loop()
@@ -199,6 +219,14 @@ be annoying.",
         self.slack_web_client = slack.WebClient(token=SLACK_TOKEN,
                                                 run_async=True,
                                                 loop=self.slack_loop)
+        self.slack_log_format = '%(asctime)s %(name)-12s %(levelname)-8s %(message)s'
+        self.slack_log_formatter = logging.Formatter(self.slack_log_format)
+        self.slack_logger = SlackHandler(self.slack_web_client,
+                                         self.slack_loop,
+                                         SLACK_ERR_CHANNEL)
+        self.slack_logger.setLevel(logging.INFO)
+        self.slack_logger.setFormatter(self.slack_log_formatter)
+        logging.getLogger('').addHandler(self.slack_logger)
         self.slack_loop.run_until_complete(self.slack_rtm_client.start())
 
     def send_to_slack(self, msg):
