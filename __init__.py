@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import re
@@ -56,7 +57,7 @@ class ZulipSlack():
 #        self.zulip_ev_thread.start()
 
         @slack.RTMClient.run_on(event='message')
-        def receive_slack_msg(**payload):
+        async def receive_slack_msg(**payload):
             _LOGGER.debug('caught slack message')
             try:
                 data = payload['data']
@@ -68,7 +69,7 @@ class ZulipSlack():
                 hide_public = False
                 if 'subtype' in data and data['subtype'] == 'bot_message':
                     bot_id = data['bot_id']
-                    user_id = self.get_slack_bot(bot_id, web_client=web_client)
+                    user_id = await self.get_slack_bot(bot_id, web_client=web_client)
                     if not user_id:
                         return
                     if user_id == SLACK_BOT_ID:
@@ -90,10 +91,10 @@ class ZulipSlack():
                     user_id = data['user']
                 channel_id = data['channel']
                 thread_ts = data['ts']
-                user = self.get_slack_user(user_id, web_client=web_client)
+                user = await self.get_slack_user(user_id, web_client=web_client)
                 if not user:
                     return
-                channel = self.get_slack_channel(channel_id,
+                channel = await self.get_slack_channel(channel_id,
                                                  web_client=web_client)
                 if not channel:
                     return
@@ -102,7 +103,7 @@ class ZulipSlack():
                     match = m.group()
                     at_user_id = match[2:-1]
                     try:
-                        at_user = self.get_slack_user(at_user_id,
+                        at_user = await self.get_slack_user(at_user_id,
                                                       web_client=web_client)
                         if at_user:
                             old_text = data['text']
@@ -162,16 +163,16 @@ class ZulipSlack():
                                        delete=delete)
                 elif channel['type'] == 'im':
                     _LOGGER.debug('updating user display name')
-                    user = self.get_slack_user(user_id, web_client=web_client,
+                    user = await self.get_slack_user(user_id, web_client=web_client,
                                                force_update=True)
-                    self.slack_web_client.chat_postMessage(
+                    await self.slack_web_client.chat_postMessage(
                         channel=channel_id,
                         text="OK, I have updated your display name for Slack \
 messgaes on Zulip. Your name is now seen as: *" + user + "*.",
                         mrkdwn=True
                     )
                 elif channel['type'] == 'group':
-                    self.slack_web_client.chat_postMessage(
+                    await self.slack_web_client.chat_postMessage(
                         channel=channel_id,
                         text="I'm not sure what I'm doing here, so I'll just \
 be annoying.",
@@ -186,9 +187,14 @@ be annoying.",
                                                               exc_traceback)))
 
         _LOGGER.debug('connecting to slack')
-        self.slack_rtm_client = slack.RTMClient(token=SLACK_TOKEN)
-        self.slack_web_client = slack.WebClient(token=SLACK_TOKEN)
-        self.slack_rtm_client.start()
+        self.slack_loop = asyncio.new_event_loop()
+        self.slack_rtm_client = slack.RTMClient(token=SLACK_TOKEN,
+                                                run_async=True,
+                                                loop=self.slack_loop)
+        self.slack_web_client = slack.WebClient(token=SLACK_TOKEN,
+                                                run_async=True,
+                                                loop=self.slack_loop)
+        self.slack_loop.run_until_complete(self.slack_rtm_client.start())
 
     def send_to_slack(self, msg):
         _LOGGER.debug('caught zulip message')
@@ -196,13 +202,14 @@ be annoying.",
             if (msg['subject'] in PUBLIC_TWO_WAY and
                 msg['sender_short_name'] != ZULIP_BOT_NAME):
                 _LOGGER.debug('good to send zulip message to slack')
-                self.slack_web_client.chat_postMessage(
-                    channel=msg['subject'],
-                    text=('*' + msg['sender_full_name'] + "*: " +
-                          msg['content']),
-                    mrkdwn=True
-        #            thread_ts=thread_ts
-                )
+                asyncio.ensure_future(
+                    self.slack_web_client.chat_postMessage(
+                        channel=msg['subject'],
+                        text=('*' + msg['sender_full_name'] + "*: " +
+                              msg['content']),
+                        mrkdwn=True
+            #            thread_ts=thread_ts
+                    ), loop=self.slack_loop)
         except:
                 e = sys.exc_info()
                 exc_type, exc_value, exc_traceback = e
@@ -217,14 +224,14 @@ be annoying.",
 #    def run_zulip_ev(self):
 #        self.zulip_client.call_on_each_event(lambda event: sys.stdout.write(str(event) + "\n"))
 
-    def get_slack_bot(self, bot_id, web_client=None, force_update=False):
+    async def get_slack_bot(self, bot_id, web_client=None, force_update=False):
         redis_key = REDIS_BOTS + bot_id
         ret_bot = self.redis.get(redis_key)
         if ret_bot is None or force_update:
             _LOGGER.debug('fetching slack bot')
             if web_client is None:
                 web_client = self.slack_web_client
-            res = web_client.bots_info(bot=bot_id)
+            res = await web_client.bots_info(bot=bot_id)
             if not res['ok']:
                 _LOGGER.error('could not fetch bot %s, %s', bot_id, repr(res))
                 return False
@@ -234,14 +241,14 @@ be annoying.",
                 self.redis.set(redis_key, ret_bot)
         return ret_bot
 
-    def get_slack_user(self, user_id, web_client=None, force_update=False):
+    async def get_slack_user(self, user_id, web_client=None, force_update=False):
         redis_key = REDIS_USERS + user_id
         ret_user = self.redis.get(redis_key)
         if ret_user is None or force_update:
             _LOGGER.debug('fetching slack user')
             if web_client is None:
                 web_client = self.slack_web_client
-            res = web_client.users_info(user=user_id)
+            res = await web_client.users_info(user=user_id)
             if not res['ok']:
                 _LOGGER.error('could not fetch user %s, %s', user_id,
                               repr(res))
@@ -255,7 +262,7 @@ be annoying.",
                 self.redis.set(redis_key, ret_user)
         return ret_user
 
-    def get_slack_channel(self, channel_id, web_client=None,
+    async def get_slack_channel(self, channel_id, web_client=None,
                           force_update=False):
         redis_key = REDIS_CHANNELS + channel_id
         ret_channel = self.redis.hgetall(redis_key)
@@ -263,7 +270,7 @@ be annoying.",
             _LOGGER.debug('fetching slack channel')
             if web_client is None:
                 web_client = self.slack_web_client
-            res = web_client.conversations_info(channel=channel_id)
+            res = await web_client.conversations_info(channel=channel_id)
             if not res['ok']:
                 _LOGGER.error('could not fetch channel %s, %s', channel_id,
                               repr(res))
