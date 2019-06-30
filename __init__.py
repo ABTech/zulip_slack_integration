@@ -168,7 +168,12 @@ class ZulipSlack():
                     channel['type'] == 'private-channel'):
                     msg = data['text']
                     channel_name = channel['name']
-                    msg_id = data['client_msg_id']
+                    if ('subtype' in data and
+                        data['subtype'] == 'group_topic'):
+                        msg_id = None
+                        user = None
+                    else:
+                        msg_id = data['client_msg_id']
             #        if 'files' in data:
             #            for file in data['files']:
             #                web_client.files_sharedPublicURL(id=file['id'])
@@ -177,10 +182,10 @@ class ZulipSlack():
             #                else:
             #                    msg += '\n' + file['permalink_public']
                     if channel_name in PUBLIC_TWO_WAY and not hide_public:
-                        self.send_to_zulip(channel_name, user, msg,
+                        self.send_to_zulip(channel_name, msg, user=user,
                                            send_public=True, slack_id=msg_id,
                                            edit=edit, delete=delete)
-                    self.send_to_zulip(channel_name, user, msg,
+                    self.send_to_zulip(channel_name, msg, user=user,
                                        slack_id=msg_id, edit=edit,
                                        delete=delete)
                 elif channel['type'] == 'im':
@@ -366,7 +371,7 @@ my records to use your new name when I forward messages to Zulip for you.",
         return ret_channel
 
     # originally from https://github.com/ABTech/zulip_groupme_integration/blob/7674a3595282ce154cd24b1903a44873d729e0cc/server.py
-    def send_to_zulip(self, subject, user, msg, slack_id=None,
+    def send_to_zulip(self, subject, msg, user=None, slack_id=None,
                       send_public=False, edit=False, delete=False):
         _LOGGER.debug('sending to zulip, public: %s', str(send_public))
         try:
@@ -380,6 +385,9 @@ my records to use your new name when I forward messages to Zulip for you.",
 
             sent = dict()
             zulip_id = None
+            user_prefix = ''
+            if user is not None:
+                user_prefix = '**' + user + '**: '
             to = ZULIP_STREAM
             if send_public:
                 to = ZULIP_PUBLIC
@@ -389,14 +397,14 @@ my records to use your new name when I forward messages to Zulip for you.",
                 if zulip_id is not None:
                     sent = self.zulip_client.update_message({
                         'message_id': int(zulip_id),
-                        "content": '**' + user + '**: ' + msg
+                        "content": user_prefix + msg
                     })
                 elif not send_public:
                     sent = self.zulip_client.send_message({
                         "type": 'stream',
                         "to": to,
                         "subject": subject,
-                        "content": '**' + user + '**: ' + msg + ' *(edited)*'
+                        "content": user_prefix + msg + ' *(edited)*'
                     })
             elif delete and slack_id:
                 redis_key = REDIS_MSG_SLACK_TO_ZULIP[to] + slack_id
@@ -406,21 +414,21 @@ my records to use your new name when I forward messages to Zulip for you.",
                 elif zulip_id is not None and not send_public:
                     sent = self.zulip_client.update_message({
                         'message_id': int(zulip_id),
-                        "content": '**' + user + '**: ' + msg + ' *(deleted)*'
+                        "content": user_prefix + msg + ' *(deleted)*'
                     })
                 elif not send_public:
                     sent = self.zulip_client.send_message({
                         "type": 'stream',
                         "to": to,
                         "subject": subject,
-                        "content": '**' + user + '**: ' + msg + ' *(deleted)*'
+                        "content": user_prefix + msg + ' *(deleted)*'
                     })
             else:
                 sent = self.zulip_client.send_message({
                     "type": 'stream',
                     "to": to,
                     "subject": subject,
-                    "content": '**' + user + '**: ' + msg
+                    "content": user_prefix + msg
 
                 })
             if 'result' not in sent or sent['result'] != 'success':
