@@ -1,5 +1,4 @@
 import asyncio
-from hashlib import blake2b
 import logging
 import os
 import re
@@ -187,20 +186,14 @@ class SlackBridge():
                         me = True
                         if 'edited' in data:
                             edit = True
+                    elif 'client_msg_id' in data:
+                        msg_id = data['client_msg_id']
+                    elif 'bot_id' in data:
+                        msg_id = None
                     else:
-                        if 'client_msg_id' in data:
-                            msg_id = data['client_msg_id']
-                        elif 'bot_id' in data:
-                            h_bot_id = data['bot_id'].encode(encoding='UTF-8')
-                            h_msg_id = f"{data['bot_id']}{data['ts']}{msg}"
-                            h_msg_id = h_msg_id.encode(encoding='UTF-8')
-                            h = blake2b(key=h_bot_id)
-                            h.update(h_msg_id)
-                            msg_id = h.hexdigest()
-                        else:
-                            _LOGGER.warning("couldn't make a msg id: %s",
-                                            trace)
-                            return
+                        msg_id = None
+                        _LOGGER.warning("no msg id for user %s: %s",
+                                        user, trace)
             #        if 'files' in data:
             #            for file in data['files']:
             #                web_client.files_sharedPublicURL(id=file['id'])
@@ -322,10 +315,9 @@ my records to use your new name when I forward messages to Zulip for you.",
             if not res['ok']:
                 _LOGGER.error('could not fetch bot %s, %s', bot_id, repr(res))
                 return False
-            else:
-                bot = res['bot']
-                ret_bot = bot['user_id']
-                self.redis.set(redis_key, ret_bot)
+            bot = res['bot']
+            ret_bot = bot['user_id']
+            self.redis.set(redis_key, ret_bot)
         return ret_bot
 
     async def get_slack_user(self, user_id, web_client=None,
@@ -341,16 +333,15 @@ my records to use your new name when I forward messages to Zulip for you.",
                 _LOGGER.error('could not fetch user %s, %s', user_id,
                               repr(res))
                 return False
+            user = res['user']
+            if user['profile']['display_name'] == '':
+                ret_user = user['name']
             else:
-                user = res['user']
-                if user['profile']['display_name'] == '':
-                    ret_user = user['name']
-                else:
-                    ret_user = user['profile']['display_name']
-                self.redis.set(redis_key, ret_user)
-                if not force_update:
-                    await self.new_slack_user(user_id, ret_user,
-                                              web_client=web_client)
+                ret_user = user['profile']['display_name']
+            self.redis.set(redis_key, ret_user)
+            if not force_update:
+                await self.new_slack_user(user_id, ret_user,
+                                          web_client=web_client)
         return ret_user
 
     async def get_slack_channel(self, channel_id, web_client=None,
