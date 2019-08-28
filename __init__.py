@@ -356,10 +356,12 @@ be annoying.",
                                    send_public=True)
             channel_id = self.get_slack_channel_by_name(channel)
             if channel_id is not None:
-                channel_type = self.get_slack_channel(channel_id)['type']
-                private = (channel_type == 'private-channel')
-                self.send_to_zulip(channel, message_text, user=user,
-                                   private=private)
+                channel_obj = self.get_slack_channel_sync(channel_id)
+                if channel_obj:
+                    channel_type = channel_obj['type']
+                    private = (channel_type == 'private-channel')
+                    self.send_to_zulip(channel, message_text, user=user,
+                                       private=private)
 
     def run_groupme_listener(self, channel, conf):
         server_address = ('', conf['BOT_PORT'])
@@ -477,7 +479,15 @@ my records to use your new name when I forward messages to Zulip for you.",
             self.redis.set(redis_key_by_name, channel_id)
         return ret_channel
 
-    async def get_slack_channel_by_name(self, channel_name):
+    def get_slack_channel_sync(self, channel_id):
+        redis_key = REDIS_CHANNELS + channel_id
+        ret_channel = self.redis.hgetall(redis_key)
+        if ret_channel is None or not ret_channel:
+            _LOGGER.warning('cannot fetch slack channel')
+            return False
+        return ret_channel
+
+    def get_slack_channel_by_name(self, channel_name):
         redis_key = REDIS_CHANNELS_BY_NAME + channel_name
         ret_channel_id = self.redis.get(redis_key)
         if ret_channel_id is None:
