@@ -79,7 +79,7 @@ class GroupMeHandler(BaseHTTPRequestHandler):
 def make_groupme_handler(channel, conf, send):
     class CustomGroupMeHandler(GroupMeHandler):
         def __init__(self, *args, **kwargs):
-            super(CustomHandler, self).__init__(*args, **kwargs)
+            super(CustomGroupMeHandler, self).__init__(*args, **kwargs)
             self.channel = channel
             self.conf = conf
             self.send = send
