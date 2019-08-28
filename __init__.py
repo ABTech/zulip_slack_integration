@@ -340,7 +340,7 @@ be annoying.",
                                                    attachment['url'])
                     break
 
-            slack_text = f"*{post_data['name']}*: {message_text}"
+            slack_text = f"*{user}*: {message_text}"
             asyncio.ensure_future(
                 self.slack_web_client.chat_postMessage(
                     channel=channel,
