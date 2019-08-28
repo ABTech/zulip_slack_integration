@@ -70,10 +70,18 @@ class GroupMeHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
-        content_length = int(self.headers['Content-Length'])
-        post_data = json.loads(self.rfile.read(content_length))
-        self.send(post_data)
-        self._set_headers()
+        try:
+            content_length = int(self.headers['Content-Length'])
+            post_data = json.loads(self.rfile.read(content_length))
+            self.send(post_data)
+            self._set_headers()
+        except:
+            e = sys.exc_info()
+            exc_type, exc_value, exc_traceback = e
+            _LOGGER.error('Error do post groupme message: %s',
+                          repr(traceback.format_exception(exc_type,
+                                                          exc_value,
+                                                          exc_traceback)))
 
 # https://stackoverflow.com/a/21631948
 def make_groupme_handler(channel, conf, send):
