@@ -332,7 +332,7 @@ be annoying.",
             message_text = post_data['text']
             user = f"{post_data['name']} [GroupMe]"
 
-            for attachment in msg['attachments']:
+            for attachment in post_data['attachments']:
                 # Add link to image to message text
                 if attachment['type'] == 'image':
                     caption = message_text if message_text else 'image'
