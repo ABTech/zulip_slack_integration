@@ -28,7 +28,7 @@ REDIS_CHANNELS = REDIS_PREFIX + ':channels:'
 REDIS_CHANNELS_BY_NAME = REDIS_PREFIX + ':channelsByName:'
 REDIS_MSG_SLACK_TO_ZULIP = {
     ZULIP_STREAM: REDIS_PREFIX + ':msg.slack.to.zulip:',
-    ZULIP_PUBLIC: REDIS_PREFIX + ':msg.slack.to.zulip.pub:'
+    ZULIP_PUBLIC: REDIS_PREFIX + ':msg.slack.to.zulip.pub:',
     ZULIP_PRIVATE: REDIS_PREFIX + ':msg.slack.to.zulip.priv:'
 }
 
