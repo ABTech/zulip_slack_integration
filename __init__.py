@@ -1,5 +1,5 @@
 import asyncio
-from BaseHTTPServer import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
 import os
