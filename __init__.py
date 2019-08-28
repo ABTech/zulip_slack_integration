@@ -508,9 +508,9 @@ my records to use your new name when I forward messages to Zulip for you.",
             sent = dict()
             user_prefix = ''
             if user is not None and not me:
-                user_prefix = '**' + user + '**: '
+                user_prefix = user + ': '
             elif user is not None and me:
-                user_prefix = '**' + user + '** '
+                user_prefix = user + ' '
 
             to = GROUPME_TWO_WAY[subject]
             send_data = {
