@@ -1,8 +1,11 @@
 import asyncio
+from BaseHTTPServer import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
 import logging
 import os
 import re
 import requests
+import ssl
 import sys
 import threading
 import traceback
@@ -56,6 +59,29 @@ class SlackHandler(logging.StreamHandler):
         except Exception as e:
             print('could not post err to slack %s', repr(e))
 
+
+class GroupMeHandler(BaseHTTPRequestHandler):
+    def _set_headers(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+
+    def do_POST(self):
+        content_length = int(self.headers['Content-Length'])
+        post_data = json.loads(self.rfile.read(content_length))
+        self.send(post_data)
+        self._set_headers()
+
+# https://stackoverflow.com/a/21631948
+def make_groupme_handler(channel, conf, send):
+    class CustomGroupMeHandler(GroupMeHandler):
+        def __init__(self, *args, **kwargs):
+            super(CustomHandler, self).__init__(*args, **kwargs)
+            self.channel = channel
+            self.conf = conf
+            self.send = send
+    return CustomGroupMeHandler
+
 class SlackBridge():
     def __init__(self):
         _LOGGER.debug('new SlackBridge instance')
@@ -84,9 +110,13 @@ class SlackBridge():
 #        self.zulip_ev_thread.start()
 
         if GROUPME_ENABLE:
-            _LOGGER.debug('connecting to groupme')
+            _LOGGER.debug('connecting to groupmes')
+            self.groupme_threads = {}
             for channel, conf in GROUPME_TWO_WAY:
-                pass
+                self.groupme_threads[channel] = threading.Thread(
+                    target=self.run_groupme_listener, args=(channel, conf))
+                self.groupme_threads[channel].setDaemon(True)
+                self.groupme_threads[channel].start()
 
         @slack.RTMClient.run_on(event='message')
         async def receive_slack_msg(**payload):
@@ -263,7 +293,7 @@ be annoying.",
         logging.getLogger('').addHandler(self.slack_logger)
         self.slack_loop.run_until_complete(self.slack_rtm_client.start())
 
-    def send_to_slack(self, msg):
+    def send_from_zulip(self, msg):
         _LOGGER.debug('caught zulip message')
         try:
             if (msg['subject'] in PUBLIC_TWO_WAY and
@@ -277,6 +307,8 @@ be annoying.",
                         mrkdwn=True
                         # thread_ts=thread_ts
                     ), loop=self.slack_loop)
+                self.send_to_groupme(msg['subject'], msg['content'],
+                                     user=msg['sender_full_name'])
         except:
             e = sys.exc_info()
             exc_type, exc_value, exc_traceback = e
@@ -286,10 +318,48 @@ be annoying.",
                                                           exc_traceback)))
 
     def run_zulip_listener(self):
-        self.zulip_client.call_on_each_message(self.send_to_slack)
+        self.zulip_client.call_on_each_message(self.send_from_zulip)
 
 #    def run_zulip_ev(self):
 #        self.zulip_client.call_on_each_event(lambda event: sys.stdout.write(str(event) + "\n"))
+
+    def send_from_groupme(self, channel, conf, post_data):
+        if post_data['name'] != conf['BOT_NAME']:
+            _LOGGER.debug('good to send groupme message to slack')
+            message_text = post_data['text']
+            user = f"{post_data['name']} [GroupMe]"
+
+            for attachment in msg['attachments']:
+                # Add link to image to message text
+                if attachment['type'] == 'image':
+                    caption = message_text if message_text else 'image'
+                    message_text = '[%s](%s)\n' % (caption,
+                                                   attachment['url'])
+                    break
+
+            slack_text = f"*{name}*: {message_text}"
+            asyncio.ensure_future(
+                self.slack_web_client.chat_postMessage(
+                    channel=channel,
+                    text=slack_text,
+                    mrkdwn=True
+                    # thread_ts=thread_ts
+                ), loop=self.slack_loop)
+            if channel in PUBLIC_TWO_WAY:
+                self.send_to_zulip(channel, message_text, user=user,
+                                   send_public=True)
+            self.send_to_zulip(channel, message_text, user=user)
+
+    def run_groupme_listener(self, channel, conf):
+        server_address = ('', conf['BOT_PORT'])
+        HandlerClass = make_groupme_handler(channel, conf,
+                                            self.send_from_groupme)
+        httpd = ThreadingHTTPServer(server_address, HandlerClass)
+        _LOGGER.info('listening http for groupme bot: %s', channel)
+        httpd.socket = ssl.wrap_socket(httpd.socket,
+                                       certfile=secrets.SSL_CERT_PATH,
+                                       server_side=True)
+        httpd.serve_forever()
 
     async def new_slack_user(self, user_id, user, web_client=None):
         if web_client is None:
