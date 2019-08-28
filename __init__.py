@@ -62,35 +62,33 @@ class SlackHandler(logging.StreamHandler):
         except Exception as e:
             print('could not post err to slack %s', repr(e))
 
-
-class GroupMeHandler(BaseHTTPRequestHandler):
-    def _set_headers(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html')
-        self.end_headers()
-
-    def do_POST(self):
-        try:
-            content_length = int(self.headers['Content-Length'])
-            post_data = json.loads(self.rfile.read(content_length))
-            self.send(post_data)
-            self._set_headers()
-        except:
-            e = sys.exc_info()
-            exc_type, exc_value, exc_traceback = e
-            _LOGGER.error('Error do post groupme message: %s',
-                          repr(traceback.format_exception(exc_type,
-                                                          exc_value,
-                                                          exc_traceback)))
-
 # https://stackoverflow.com/a/21631948
 def make_groupme_handler(channel, conf, send):
-    class CustomGroupMeHandler(GroupMeHandler):
+    class CustomGroupMeHandler(BaseHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super(CustomGroupMeHandler, self).__init__(*args, **kwargs)
             self.channel = channel
             self.conf = conf
             self.send = send
+
+        def _set_headers(self):
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+
+        def do_POST(self):
+            try:
+                content_length = int(self.headers['Content-Length'])
+                post_data = json.loads(self.rfile.read(content_length))
+                self.send(post_data)
+                self._set_headers()
+            except:
+                e = sys.exc_info()
+                exc_type, exc_value, exc_traceback = e
+                _LOGGER.error('Error do post groupme message: %s',
+                              repr(traceback.format_exception(exc_type,
+                                                              exc_value,
+                                                              exc_traceback)))
     return CustomGroupMeHandler
 
 class SlackBridge():
@@ -366,7 +364,7 @@ be annoying.",
         HandlerClass = make_groupme_handler(channel, conf,
                                             self.send_from_groupme)
         httpd = ThreadingHTTPServer(server_address, HandlerClass)
-        _LOGGER.info('listening http for groupme bot: %s', channel)
+        _LOGGER.debug('listening http for groupme bot: %s', channel)
         httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
         httpd.serve_forever()
 
@@ -569,7 +567,6 @@ my records to use your new name when I forward messages to Zulip for you.",
 
     def send_to_groupme(self, subject, msg, user=None, edit=False,
                         delete=False, me=False):
-        _LOGGER.debug('sending to groupme')
         try:
             # Check for image
         #    for attachment in msg['attachments']:
@@ -583,6 +580,7 @@ my records to use your new name when I forward messages to Zulip for you.",
                 return
             elif edit or delete:
                 return
+            _LOGGER.debug('sending to groupme')
 
             sent = dict()
             user_prefix = ''
