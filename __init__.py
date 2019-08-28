@@ -115,7 +115,7 @@ class SlackBridge():
         if GROUPME_ENABLE:
             _LOGGER.debug('connecting to groupmes')
             self.groupme_threads = {}
-            for channel, conf in GROUPME_TWO_WAY:
+            for channel, conf in GROUPME_TWO_WAY.items():
                 self.groupme_threads[channel] = threading.Thread(
                     target=self.run_groupme_listener, args=(channel, conf))
                 self.groupme_threads[channel].setDaemon(True)
