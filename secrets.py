@@ -18,7 +18,8 @@ REDIS_PREFIX = 'zulip.slack'
 
 
 GROUPME_ENABLE = False
-SSL_CERT_PATH = ''
+SSL_CERT_CHAIN_PATH = ''
+SSL_CERT_KEY_PATH = ''
 GROUPME_TWO_WAY = {
     'channel-name': {
         'BOT_ID': '123456789123456789',

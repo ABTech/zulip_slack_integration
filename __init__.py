@@ -19,7 +19,7 @@ from secrets import (PUBLIC_TWO_WAY, ZULIP_BOT_NAME, ZULIP_BOT_EMAIL,
                      SLACK_BOT_ID, SLACK_TOKEN, REDIS_HOSTNAME, REDIS_PORT,
                      REDIS_PASSWORD, SLACK_EDIT_UPDATE_ZULIP_TTL,
                      REDIS_PREFIX, SLACK_ERR_CHANNEL, GROUPME_TWO_WAY,
-                     GROUPME_ENABLE, SSL_CERT_PATH)
+                     GROUPME_ENABLE, SSL_CERT_CHAIN_PATH, SSL_CERT_KEY_PATH)
 
 REDIS_USERS = REDIS_PREFIX + ':users:'
 REDIS_BOTS = REDIS_PREFIX + ':bots:'
@@ -40,6 +40,9 @@ LOGLEVEL = os.environ.get('LOGLEVEL', 'INFO').upper()
 logging.basicConfig(level=LOGLEVEL)
 
 _LOGGER = logging.getLogger(__name__)
+
+context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+context.load_cert_chain(SSL_CERT_CHAIN_PATH, SSL_CERT_KEY_PATH)
 
 class SlackHandler(logging.StreamHandler):
     def __init__(self, web_client, event_loop, channel_id):
@@ -356,8 +359,7 @@ be annoying.",
                                             self.send_from_groupme)
         httpd = ThreadingHTTPServer(server_address, HandlerClass)
         _LOGGER.info('listening http for groupme bot: %s', channel)
-        httpd.socket = ssl.wrap_socket(httpd.socket, certfile=SSL_CERT_PATH,
-                                       server_side=True)
+        httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
         httpd.serve_forever()
 
     async def new_slack_user(self, user_id, user, web_client=None):
