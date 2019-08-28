@@ -19,7 +19,7 @@ from secrets import (PUBLIC_TWO_WAY, ZULIP_BOT_NAME, ZULIP_BOT_EMAIL,
                      SLACK_BOT_ID, SLACK_TOKEN, REDIS_HOSTNAME, REDIS_PORT,
                      REDIS_PASSWORD, SLACK_EDIT_UPDATE_ZULIP_TTL,
                      REDIS_PREFIX, SLACK_ERR_CHANNEL, GROUPME_TWO_WAY,
-                     GROUPME_ENABLE)
+                     GROUPME_ENABLE, SSL_CERT_PATH)
 
 REDIS_USERS = REDIS_PREFIX + ':users:'
 REDIS_BOTS = REDIS_PREFIX + ':bots:'
@@ -356,8 +356,7 @@ be annoying.",
                                             self.send_from_groupme)
         httpd = ThreadingHTTPServer(server_address, HandlerClass)
         _LOGGER.info('listening http for groupme bot: %s', channel)
-        httpd.socket = ssl.wrap_socket(httpd.socket,
-                                       certfile=secrets.SSL_CERT_PATH,
+        httpd.socket = ssl.wrap_socket(httpd.socket, certfile=SSL_CERT_PATH,
                                        server_side=True)
         httpd.serve_forever()
 
