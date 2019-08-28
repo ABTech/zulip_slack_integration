@@ -63,7 +63,7 @@ class SlackHandler(logging.StreamHandler):
             print('could not post err to slack %s', repr(e))
 
 # https://stackoverflow.com/a/21631948
-def make_groupme_handler(send):
+def make_groupme_handler(channel, conf, send):
     class CustomGroupMeHandler(BaseHTTPRequestHandler):
         def _set_headers(self):
             self.send_response(200)
@@ -74,7 +74,7 @@ def make_groupme_handler(send):
             try:
                 content_length = int(self.headers['Content-Length'])
                 post_data = json.loads(self.rfile.read(content_length))
-                send(post_data)
+                send(channel, conf, post_data)
                 self._set_headers()
             except:
                 e = sys.exc_info()
@@ -355,7 +355,8 @@ be annoying.",
 
     def run_groupme_listener(self, channel, conf):
         server_address = ('', conf['BOT_PORT'])
-        HandlerClass = make_groupme_handler(self.send_from_groupme)
+        HandlerClass = make_groupme_handler(channel, conf,
+                                            self.send_from_groupme)
         httpd = ThreadingHTTPServer(server_address, HandlerClass)
         _LOGGER.debug('listening http for groupme bot: %s', channel)
         httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
