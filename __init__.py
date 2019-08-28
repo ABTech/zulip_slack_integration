@@ -25,7 +25,7 @@ from secrets import (PUBLIC_TWO_WAY, ZULIP_BOT_NAME, ZULIP_BOT_EMAIL,
 REDIS_USERS = REDIS_PREFIX + ':users:'
 REDIS_BOTS = REDIS_PREFIX + ':bots:'
 REDIS_CHANNELS = REDIS_PREFIX + ':channels:'
-REDIS_CHANNELS_BY_NAME = REDIS_PREFIX + ':channelsByName:'
+REDIS_CHANNELS_BY_NAME = REDIS_PREFIX + ':channels.by.name:'
 REDIS_MSG_SLACK_TO_ZULIP = {
     ZULIP_STREAM: REDIS_PREFIX + ':msg.slack.to.zulip:',
     ZULIP_PUBLIC: REDIS_PREFIX + ':msg.slack.to.zulip.pub:',
