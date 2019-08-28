@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import re
+import requests
 import sys
 import threading
 import traceback
@@ -14,7 +15,8 @@ from secrets import (PUBLIC_TWO_WAY, ZULIP_BOT_NAME, ZULIP_BOT_EMAIL,
                      ZULIP_API_KEY, ZULIP_URL, ZULIP_STREAM, ZULIP_PUBLIC,
                      SLACK_BOT_ID, SLACK_TOKEN, REDIS_HOSTNAME, REDIS_PORT,
                      REDIS_PASSWORD, SLACK_EDIT_UPDATE_ZULIP_TTL,
-                     REDIS_PREFIX, SLACK_ERR_CHANNEL)
+                     REDIS_PREFIX, SLACK_ERR_CHANNEL, GROUPME_TWO_WAY,
+                     GROUPME_ENABLE)
 
 REDIS_USERS = REDIS_PREFIX + ':users:'
 REDIS_BOTS = REDIS_PREFIX + ':bots:'
@@ -80,6 +82,11 @@ class SlackBridge():
 #        self.zulip_ev_thread = threading.Thread(target=self.run_zulip_ev)
 #        self.zulip_ev_thread.setDaemon(True)
 #        self.zulip_ev_thread.start()
+
+        if GROUPME_ENABLE:
+            _LOGGER.debug('connecting to groupme')
+            for channel, conf in GROUPME_TWO_WAY:
+                pass
 
         @slack.RTMClient.run_on(event='message')
         async def receive_slack_msg(**payload):
@@ -208,6 +215,8 @@ class SlackBridge():
                     self.send_to_zulip(channel_name, msg, user=user,
                                        slack_id=msg_id, edit=edit,
                                        delete=delete, me=me)
+                    self.send_to_groupme(channel_name, msg, user=user,
+                                         edit=edit, delete=delete, me=me)
                 elif channel['type'] == 'im':
                     _LOGGER.debug('updating user display name')
                     user = await self.get_slack_user(user_id,
@@ -475,6 +484,50 @@ my records to use your new name when I forward messages to Zulip for you.",
             e = sys.exc_info()
             exc_type, exc_value, exc_traceback = e
             _LOGGER.error('Error send zulip message: %s',
+                          repr(traceback.format_exception(exc_type,
+                                                          exc_value,
+                                                          exc_traceback)))
+
+    def send_to_groupme(self, subject, msg, user=None, edit=False,
+                        delete=False, me=False):
+        _LOGGER.debug('sending to groupme')
+        try:
+            # Check for image
+        #    for attachment in msg['attachments']:
+        #        # Add link to image to message text
+        #        if attachment['type'] == 'image':
+        #            caption = message_text if message_text else 'image'
+        #            message_text = '[%s](%s)\n' % (caption, attachment['url'])
+        #            break
+
+            if subject not in GROUPME_TWO_WAY:
+                return
+            elif edit or delete:
+                return
+
+            sent = dict()
+            user_prefix = ''
+            if user is not None and not me:
+                user_prefix = '**' + user + '**: '
+            elif user is not None and me:
+                user_prefix = '**' + user + '** '
+
+            to = GROUPME_TWO_WAY[subject]
+            send_data = {
+                'bot_id': to['BOT_ID'],
+                'text': user_prefix + msg
+            }
+
+            requests.post("https://api.groupme.com/v3/bots/post",
+                          data=send_data)
+
+            # if 'result' not in sent or sent['result'] != 'success':
+            #     _LOGGER.error('Could not send zulip message %s', sent)
+            #     return
+        except:
+            e = sys.exc_info()
+            exc_type, exc_value, exc_traceback = e
+            _LOGGER.error('Error send groupme message: %s',
                           repr(traceback.format_exception(exc_type,
                                                           exc_value,
                                                           exc_traceback)))

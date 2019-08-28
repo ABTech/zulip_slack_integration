@@ -15,3 +15,13 @@ REDIS_PORT = 6379
 REDIS_PASSWORD = ''
 SLACK_EDIT_UPDATE_ZULIP_TTL = 60*60
 REDIS_PREFIX = 'zulip.slack'
+
+
+GROUPME_ENABLE = False
+GROUPME_TWO_WAY = {
+    'channel-name': {
+        'BOT_ID': '123456789123456789',
+        'BOT_PORT': 1234
+        'BOT_NAME': 'mybot'
+    }
+}
