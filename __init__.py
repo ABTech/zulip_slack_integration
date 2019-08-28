@@ -356,7 +356,7 @@ be annoying.",
                                    send_public=True)
             channel_id = self.get_slack_channel_by_name(channel)
             if channel_id is not None:
-                channel_type = get_slack_channel(channel_id)['type']
+                channel_type = self.get_slack_channel(channel_id)['type']
                 private = (channel_type == 'private-channel')
                 self.send_to_zulip(channel, message_text, user=user,
                                    private=private)
