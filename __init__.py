@@ -19,11 +19,13 @@ from secrets import (PUBLIC_TWO_WAY, ZULIP_BOT_NAME, ZULIP_BOT_EMAIL,
                      SLACK_BOT_ID, SLACK_TOKEN, REDIS_HOSTNAME, REDIS_PORT,
                      REDIS_PASSWORD, SLACK_EDIT_UPDATE_ZULIP_TTL,
                      REDIS_PREFIX, SLACK_ERR_CHANNEL, GROUPME_TWO_WAY,
-                     GROUPME_ENABLE, SSL_CERT_CHAIN_PATH, SSL_CERT_KEY_PATH)
+                     GROUPME_ENABLE, SSL_CERT_CHAIN_PATH, SSL_CERT_KEY_PATH,
+                     ZULIP_PRIVATE_STREAM)
 
 REDIS_USERS = REDIS_PREFIX + ':users:'
 REDIS_BOTS = REDIS_PREFIX + ':bots:'
 REDIS_CHANNELS = REDIS_PREFIX + ':channels:'
+REDIS_CHANNELS_BY_NAME = REDIS_PREFIX + ':channelsByName:'
 REDIS_MSG_SLACK_TO_ZULIP = {
     ZULIP_STREAM: REDIS_PREFIX + ':msg.slack.to.zulip:',
     ZULIP_PUBLIC: REDIS_PREFIX + ':msg.slack.to.zulip.pub:'
@@ -131,7 +133,6 @@ class SlackBridge():
                 bot = False
                 edit = False
                 delete = False
-                hide_public = False
                 me = False
                 if 'subtype' in data and data['subtype'] == 'bot_message':
                     bot_id = data['bot_id']
@@ -216,6 +217,7 @@ class SlackBridge():
                         channel['type'] == 'private-channel'):
                     msg = data['text']
                     channel_name = channel['name']
+                    private = (channel['type'] == 'private-channel')
                     if ('subtype' in data and
                             data['subtype'] in GROUP_UPDATES):
                         msg_id = None
@@ -241,13 +243,13 @@ class SlackBridge():
             #                    msg = file['permalink_public']
             #                else:
             #                    msg += '\n' + file['permalink_public']
-                    if channel_name in PUBLIC_TWO_WAY and not hide_public:
+                    if channel_name in PUBLIC_TWO_WAY:
                         self.send_to_zulip(channel_name, msg, user=user,
                                            send_public=True, slack_id=msg_id,
                                            edit=edit, delete=delete, me=me)
                     self.send_to_zulip(channel_name, msg, user=user,
                                        slack_id=msg_id, edit=edit,
-                                       delete=delete, me=me)
+                                       delete=delete, me=me, private=private)
                     self.send_to_groupme(channel_name, msg, user=user,
                                          edit=edit, delete=delete, me=me)
                 elif channel['type'] == 'im':
@@ -351,7 +353,12 @@ be annoying.",
             if channel in PUBLIC_TWO_WAY:
                 self.send_to_zulip(channel, message_text, user=user,
                                    send_public=True)
-            self.send_to_zulip(channel, message_text, user=user)
+            channel_id = self.get_slack_channel_by_name(channel)
+            if channel_id is not None:
+                channel_type = get_slack_channel(channel_id)['type']
+                private = (channel_type == 'private-channel')
+                self.send_to_zulip(channel, message_text, user=user,
+                                   private=private)
 
     def run_groupme_listener(self, channel, conf):
         server_address = ('', conf['BOT_PORT'])
@@ -465,11 +472,22 @@ my records to use your new name when I forward messages to Zulip for you.",
                                 channel_id)
                 return False
             self.redis.hmset(redis_key, ret_channel)
+            redis_key_by_name = REDIS_CHANNELS_BY_NAME + channel['name']
+            self.redis.set(redis_key_by_name, channel_id)
         return ret_channel
+
+    async def get_slack_channel_by_name(self, channel_name):
+        redis_key = REDIS_CHANNELS_BY_NAME + channel_name
+        ret_channel_id = self.redis.get(redis_key)
+        if ret_channel_id is None:
+            _LOGGER.warning('cannot get slack channel by name yet: %s',
+                            channel_name)
+        return ret_channel_id
 
     # originally from https://github.com/ABTech/zulip_groupme_integration/blob/7674a3595282ce154cd24b1903a44873d729e0cc/server.py
     def send_to_zulip(self, subject, msg, user=None, slack_id=None,
-                      send_public=False, edit=False, delete=False, me=False):
+                      send_public=False, edit=False, delete=False, me=False,
+                      private=False):
         _LOGGER.debug('sending to zulip, public: %s', str(send_public))
         try:
             # Check for image
@@ -490,6 +508,8 @@ my records to use your new name when I forward messages to Zulip for you.",
             to = ZULIP_STREAM
             if send_public:
                 to = ZULIP_PUBLIC
+            elif private:
+                to = ZULIP_PRIVATE_STREAM
             if edit and slack_id:
                 redis_key = REDIS_MSG_SLACK_TO_ZULIP[to] + slack_id
                 zulip_id = self.redis.get(redis_key)

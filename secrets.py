@@ -2,6 +2,7 @@
 SLACK_BOT_ID = 'U00000000'
 SLACK_ERR_CHANNEL = 'U00000000'
 ZULIP_STREAM = 'my stream'
+ZULIP_PRIVATE_STREAM = 'my private stream'
 ZULIP_BOT_NAME = 'ack-bot'
 ZULIP_BOT_EMAIL = 'some-bot@site.zulipchat.com'
 ZULIP_API_KEY = '000000000000000000'
