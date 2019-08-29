@@ -540,6 +540,9 @@ my records to use your new name when I forward messages to Zulip for you.",
                         attach_txt += attachment['pretext'] + '\n'
                     if ('text' in attachment or 'title' in attachment or
                             'author_name' in attachment):
+                        if (not edit and not delete and not len(msg) > 0 and
+                                'pretext' not in attachment):
+                            attach_txt += '\n'
                         attach_txt += '```quote\n'
                         if 'author_link' in attachment:
                             attach_txt += f"[{attachment['author_name']}]({attachment['author_link']})\n"
