@@ -235,8 +235,8 @@ class SlackBridge():
                         msg_id = None
                     else:
                         msg_id = None
-                        _LOGGER.warning("no msg id for user %s: %s",
-                                        user, trace)
+                        _LOGGER.warning("no msg id for user %s: %s", user,
+                                        data)
             #        if 'files' in data:
             #            for file in data['files']:
             #                web_client.files_sharedPublicURL(id=file['id'])
