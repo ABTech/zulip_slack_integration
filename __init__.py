@@ -475,8 +475,10 @@ my records to use your new name when I forward messages to Zulip for you.",
                                 channel_id)
                 return False
             self.redis.hmset(redis_key, ret_channel)
-            redis_key_by_name = REDIS_CHANNELS_BY_NAME + channel['name']
-            self.redis.set(redis_key_by_name, channel_id)
+            if (ret_channel['type'] == 'channel' or
+                    ret_channel['type'] == 'private-channel'):
+                redis_key_by_name = REDIS_CHANNELS_BY_NAME + channel['name']
+                self.redis.set(redis_key_by_name, channel_id)
         return ret_channel
 
     def get_slack_channel_sync(self, channel_id):
