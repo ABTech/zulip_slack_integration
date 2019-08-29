@@ -550,7 +550,7 @@ my records to use your new name when I forward messages to Zulip for you.",
                         elif 'title' in attachment:
                             attach_txt += f"**{attachment['title']}**\n"
                         if 'text' in attachment:
-                            attach_txt += attachment['text']
+                            attach_txt += attachment['text'] + '\n'
                         if 'image_url' in attachment:
                             attach_txt += f"[Image]({attachment['image_url']})\n"
                         if 'fields' in attachment:
