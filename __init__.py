@@ -1,5 +1,6 @@
 import asyncio
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import datetime
 import json
 import logging
 import os
@@ -135,7 +136,9 @@ class SlackBridge():
                 edit = False
                 delete = False
                 me = False
-                if 'subtype' in data and data['subtype'] == 'bot_message':
+                attachments = []
+                if (('subtype' in data and data['subtype'] == 'bot_message') or
+                        ('bot_id' in data and 'user' not in data)):
                     bot_id = data['bot_id']
                     user_id = await self.get_slack_bot(bot_id,
                                                        web_client=web_client)
@@ -237,6 +240,9 @@ class SlackBridge():
                         msg_id = None
                         _LOGGER.warning("no msg id for user %s: %s", user,
                                         data)
+
+                    if 'attachments' in data:
+                        attachments = data['attachments']
             #        if 'files' in data:
             #            for file in data['files']:
             #                web_client.files_sharedPublicURL(id=file['id'])
@@ -247,10 +253,12 @@ class SlackBridge():
                     if channel_name in PUBLIC_TWO_WAY:
                         self.send_to_zulip(channel_name, msg, user=user,
                                            send_public=True, slack_id=msg_id,
-                                           edit=edit, delete=delete, me=me)
+                                           edit=edit, delete=delete, me=me,
+                                           attachments=attachments)
                     self.send_to_zulip(channel_name, msg, user=user,
                                        slack_id=msg_id, edit=edit,
-                                       delete=delete, me=me, private=private)
+                                       delete=delete, me=me, private=private,
+                                       attachments=attachments)
                     self.send_to_groupme(channel_name, msg, user=user,
                                          edit=edit, delete=delete, me=me)
                 elif channel['type'] == 'im':
@@ -500,7 +508,7 @@ my records to use your new name when I forward messages to Zulip for you.",
     # originally from https://github.com/ABTech/zulip_groupme_integration/blob/7674a3595282ce154cd24b1903a44873d729e0cc/server.py
     def send_to_zulip(self, subject, msg, user=None, slack_id=None,
                       send_public=False, edit=False, delete=False, me=False,
-                      private=False):
+                      private=False, attachments=attachments):
         _LOGGER.debug('sending to zulip, public: %s', str(send_public))
         try:
             # Check for image
@@ -514,10 +522,54 @@ my records to use your new name when I forward messages to Zulip for you.",
             sent = dict()
             zulip_id = None
             user_prefix = ''
+            attach_txt = ''
+
             if user is not None and not me:
                 user_prefix = '**' + user + '**: '
             elif user is not None and me:
                 user_prefix = '**' + user + '** '
+
+            if len(attachments) > 0:
+                if edit or delete or len(msg) > 0:
+                    attach_txt += '\n\n'
+                for attach_i in range(len(attachments)):
+                    if attach_i > 0:
+                        attach_txt += '\n\n'
+                    attachment = attachments[attach_i]
+                    if 'pretext' in attachment:
+                        attach_txt += attachment['pretext'] + '\n'
+                    if ('text' in attachment or 'title' in attachment or
+                            'author_name' in attachment):
+                        attach_txt += '```quote\n'
+                        if 'author_link' in attachment:
+                            attach_txt += f"[{attachment['author_name']}]({attachment['author_link']})\n"
+                        elif 'author_name' in attachment:
+                            attach_txt += f"{attachment['author_name']}\n"
+                        if 'title_link' in attachment:
+                            attach_txt += f"**[{attachment['title']}]({attachment['title_link']})**\n"
+                        elif 'title' in attachment:
+                            attach_txt += f"**{attachment['title']}**\n"
+                        if 'text' in attachment:
+                            attach_txt += attachment['text']
+                        if 'image_url' in attachment:
+                            attach_txt += f"[Image]({attachment['image_url']})\n"
+                        if 'fields' in attachment:
+                            for field in attachment['fields']:
+                                if 'title' in field:
+                                    attach_txt += f"**{field['title']}**\n"
+                                if 'value' in field:
+                                    attach_txt += f"{field['value']}\n"
+                        if 'footer' in attachment:
+                            attach_txt += f"*{attachment['footer']}*"
+                        if 'footer' in attachment and 'ts' in attachment:
+                            attach_txt += " | "
+                        if 'ts' in attachment:
+                            out_time = datetime.datetime.fromtimestamp(attachment['ts']).strftime('%c')
+                            attach_txt += f"*{out_time}*"
+                        if 'footer' in attachment or 'ts' in attachment:
+                            attach_txt += "\n"
+                        attach_txt += '```'
+
             to = ZULIP_STREAM
             if send_public:
                 to = ZULIP_PUBLIC
@@ -529,14 +581,14 @@ my records to use your new name when I forward messages to Zulip for you.",
                 if zulip_id is not None:
                     sent = self.zulip_client.update_message({
                         'message_id': int(zulip_id),
-                        "content": user_prefix + msg
+                        "content": user_prefix + msg + attach_txt
                     })
                 elif not send_public:
                     sent = self.zulip_client.send_message({
                         "type": 'stream',
                         "to": to,
                         "subject": subject,
-                        "content": user_prefix + msg + ' *(edited)*'
+                        "content": f"{user_prefix}{msg} *(edited)*{attach_txt}"
                     })
             elif edit and not slack_id and send_public:
                 # don't publish me_message edits publically
@@ -546,7 +598,7 @@ my records to use your new name when I forward messages to Zulip for you.",
                     "type": 'stream',
                     "to": to,
                     "subject": subject,
-                    "content": user_prefix + msg + ' *(edited)*'
+                    "content": f"{user_prefix}{msg} *(edited)*{attach_txt}"
                 })
             elif delete and slack_id:
                 redis_key = REDIS_MSG_SLACK_TO_ZULIP[to] + slack_id
@@ -556,21 +608,21 @@ my records to use your new name when I forward messages to Zulip for you.",
                 elif zulip_id is not None and not send_public:
                     sent = self.zulip_client.update_message({
                         'message_id': int(zulip_id),
-                        "content": user_prefix + msg + ' *(deleted)*'
+                        "content": f"{user_prefix}{msg} *(deleted)*{attach_txt}"
                     })
                 elif not send_public:
                     sent = self.zulip_client.send_message({
                         "type": 'stream',
                         "to": to,
                         "subject": subject,
-                        "content": user_prefix + msg + ' *(deleted)*'
+                        "content": f"{user_prefix}{msg} *(deleted)*{attach_txt}"
                     })
             else:
                 sent = self.zulip_client.send_message({
                     "type": 'stream',
                     "to": to,
                     "subject": subject,
-                    "content": user_prefix + msg
+                    "content": user_prefix + msg + attach_txt
 
                 })
             if 'result' not in sent or sent['result'] != 'success':
