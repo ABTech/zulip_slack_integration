@@ -508,7 +508,7 @@ my records to use your new name when I forward messages to Zulip for you.",
     # originally from https://github.com/ABTech/zulip_groupme_integration/blob/7674a3595282ce154cd24b1903a44873d729e0cc/server.py
     def send_to_zulip(self, subject, msg, user=None, slack_id=None,
                       send_public=False, edit=False, delete=False, me=False,
-                      private=False, attachments=attachments):
+                      private=False, attachments=[]):
         _LOGGER.debug('sending to zulip, public: %s', str(send_public))
         try:
             # Check for image
