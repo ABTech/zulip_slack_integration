@@ -96,6 +96,7 @@ class SlackBridge():
         slack_user_match = re.compile("<@[A-Z0-9]+>")
         slack_notif_match = re.compile("<![a-zA-Z0-9]+>")
         slack_channel_match = re.compile("<#[a-zA-Z0-9]+\\|[a-zA-Z0-9]+>")
+        slack_link_match = re.compile("<[a-zA-Z0-9]+\\|[a-zA-Z0-9]+>")
 
         _LOGGER.debug('connecting to redis')
         self.redis = redis.Redis(
