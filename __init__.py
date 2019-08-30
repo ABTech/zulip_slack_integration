@@ -144,6 +144,7 @@ class SlackBridge():
                     user_id = await self.get_slack_bot(bot_id,
                                                        web_client=web_client)
                     if not user_id:
+                        _LOGGER.debug("no bot found")
                         return
                     if user_id == SLACK_BOT_ID:
                         _LOGGER.debug("oops that's my message!")
