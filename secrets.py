@@ -3,7 +3,7 @@
 
 # Authentication / Authorization configuration
 SLACK_BOT_ID = 'U00000000'                       # User ID of Bot
-ZULIP_BOT_NAME = 'some-bot'                      # Loclapart of bot email
+ZULIP_BOT_NAME = 'some-bot'                      # Localpart of bot email
 ZULIP_BOT_EMAIL = 'some-bot@zulipchat.com'       # Bot Email for zulip config.
 ZULIP_API_KEY = '000000000000000000'
 ZULIP_URL = 'https://andrew.zulipchat.com'
