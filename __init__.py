@@ -45,8 +45,9 @@ logging.basicConfig(level=LOGLEVEL)
 
 _LOGGER = logging.getLogger(__name__)
 
-context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-context.load_cert_chain(SSL_CERT_CHAIN_PATH, SSL_CERT_KEY_PATH)
+if GROUPME_ENABLE:
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(SSL_CERT_CHAIN_PATH, SSL_CERT_KEY_PATH)
 
 class SlackHandler(logging.StreamHandler):
     def __init__(self, web_client, event_loop, channel_id):
