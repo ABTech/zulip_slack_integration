@@ -18,6 +18,7 @@ PUBLIC_TWO_WAY = ['social']
 PUBLIC_TWO_WAY_STREAM = 'abtech'  # Zulip stream for public two-way communications
 
 # Configuration for zulip-side logging streams
+ZULIP_LOG_ENABLE = True
 ZULIP_LOG_PUBLIC_STREAM = 'slack'           # Public logging zulip stream
 ZULIP_LOG_PRIVATE_STREAM = 'slack-private'  # Private logging zulip stream
 
