@@ -16,21 +16,21 @@ import slack
 import zulip
 
 from secrets import (PUBLIC_TWO_WAY, ZULIP_BOT_NAME, ZULIP_BOT_EMAIL,
-                     ZULIP_API_KEY, ZULIP_URL, ZULIP_STREAM, ZULIP_PUBLIC,
+                     ZULIP_API_KEY, ZULIP_URL, PUBLIC_TWO_WAY_STREAM,
                      SLACK_BOT_ID, SLACK_TOKEN, REDIS_HOSTNAME, REDIS_PORT,
                      REDIS_PASSWORD, SLACK_EDIT_UPDATE_ZULIP_TTL,
                      REDIS_PREFIX, SLACK_ERR_CHANNEL, GROUPME_TWO_WAY,
                      GROUPME_ENABLE, SSL_CERT_CHAIN_PATH, SSL_CERT_KEY_PATH,
-                     ZULIP_PRIVATE)
+                     ZULIP_LOG_PUBLIC_STREAM, ZULIP_LOG_PRIVATE_STREAM)
 
 REDIS_USERS = REDIS_PREFIX + ':users:'
 REDIS_BOTS = REDIS_PREFIX + ':bots:'
 REDIS_CHANNELS = REDIS_PREFIX + ':channels:'
 REDIS_CHANNELS_BY_NAME = REDIS_PREFIX + ':channels.by.name:'
 REDIS_MSG_SLACK_TO_ZULIP = {
-    ZULIP_STREAM: REDIS_PREFIX + ':msg.slack.to.zulip:',
-    ZULIP_PUBLIC: REDIS_PREFIX + ':msg.slack.to.zulip.pub:',
-    ZULIP_PRIVATE: REDIS_PREFIX + ':msg.slack.to.zulip.priv:'
+    PUBLIC_TWO_WAY_STREAM:    REDIS_PREFIX + ':msg.slack.to.zulip.pub:',
+    ZULIP_LOG_PUBLIC_STREAM:  REDIS_PREFIX + ':msg.slack.to.zulip:',
+    ZULIP_LOG_PRIVATE_STREAM: REDIS_PREFIX + ':msg.slack.to.zulip.priv:'
 }
 
 GROUP_UPDATES = ['channel_archive', 'channel_join', 'channel_leave',
@@ -576,11 +576,11 @@ my records to use your new name when I forward messages to Zulip for you.",
                             attach_txt += "\n"
                         attach_txt += '```'
 
-            to = ZULIP_STREAM
+            to = ZULIP_LOG_PUBLIC_STREAM
             if send_public:
-                to = ZULIP_PUBLIC
+                to = PUBLIC_TWO_WAY_STREAM
             elif private:
-                to = ZULIP_PRIVATE
+                to = ZULIP_LOG_PRIVATE_STREAM
             if edit and slack_id:
                 redis_key = REDIS_MSG_SLACK_TO_ZULIP[to] + slack_id
                 zulip_id = self.redis.get(redis_key)
