@@ -15,12 +15,16 @@ import redis
 import slack
 import zulip
 
-from secrets import (PUBLIC_TWO_WAY, ZULIP_BOT_NAME, ZULIP_BOT_EMAIL,
-                     ZULIP_API_KEY, ZULIP_URL, PUBLIC_TWO_WAY_STREAM,
-                     SLACK_BOT_ID, SLACK_TOKEN, REDIS_HOSTNAME, REDIS_PORT,
-                     REDIS_PASSWORD, SLACK_EDIT_UPDATE_ZULIP_TTL,
-                     REDIS_PREFIX, SLACK_ERR_CHANNEL, GROUPME_TWO_WAY,
-                     GROUPME_ENABLE, SSL_CERT_CHAIN_PATH, SSL_CERT_KEY_PATH,
+from secrets import (ZULIP_BOT_NAME, ZULIP_BOT_EMAIL,
+                     ZULIP_API_KEY, ZULIP_URL,
+                     SLACK_BOT_ID, SLACK_TOKEN, 
+                     PUBLIC_TWO_WAY, PUBLIC_TWO_WAY_STREAM,
+                     REDIS_HOSTNAME, REDIS_PORT,
+                     REDIS_PASSWORD, REDIS_PREFIX,
+                     SLACK_EDIT_UPDATE_ZULIP_TTL, SLACK_ERR_CHANNEL,
+                     GROUPME_ENABLE, GROUPME_TWO_WAY,
+                     SSL_CERT_CHAIN_PATH, SSL_CERT_KEY_PATH,
+                     ZULIP_LOG_ENABLE,
                      ZULIP_LOG_PUBLIC_STREAM, ZULIP_LOG_PRIVATE_STREAM)
 
 REDIS_USERS = REDIS_PREFIX + ':users:'
@@ -258,12 +262,22 @@ class SlackBridge():
                                            send_public=True, slack_id=msg_id,
                                            edit=edit, delete=delete, me=me,
                                            attachments=attachments)
-                    self.send_to_zulip(channel_name, msg, user=user,
-                                       slack_id=msg_id, edit=edit,
-                                       delete=delete, me=me, private=private,
-                                       attachments=attachments)
-                    self.send_to_groupme(channel_name, msg, user=user,
-                                         edit=edit, delete=delete, me=me)
+
+                    # If we are not sending publicly, then we are sending for
+                    # logging purposes, which might be disabled.
+                    if ZULIP_LOG_ENABLE:
+                        self.send_to_zulip(channel_name, msg, user=user,
+                                           slack_id=msg_id, edit=edit,
+                                           delete=delete, me=me, private=private,
+                                           attachments=attachments)
+
+                    # If groupme is enabled, then send there.  Note that this
+                    # will also filter to only the GROUPME_TWO_WAY channels
+                    # within the send_to_groupme call.
+                    if GROUPME_ENABLE:
+                        self.send_to_groupme(channel_name, msg, user=user,
+                                             edit=edit, delete=delete, me=me)
+
                 elif channel['type'] == 'im':
                     _LOGGER.debug('updating user display name')
                     user = await self.get_slack_user(user_id,
@@ -324,8 +338,9 @@ be annoying.",
                         mrkdwn=True
                         # thread_ts=thread_ts
                     ), loop=self.slack_loop)
-                self.send_to_groupme(msg['subject'], msg['content'],
-                                     user=msg['sender_full_name'])
+                if GROUPME_ENABLE:
+                    self.send_to_groupme(msg['subject'], msg['content'],
+                                         user=msg['sender_full_name'])
         except:
             e = sys.exc_info()
             exc_type, exc_value, exc_traceback = e
@@ -661,10 +676,17 @@ my records to use your new name when I forward messages to Zulip for you.",
         #            message_text = '[%s](%s)\n' % (caption, attachment['url'])
         #            break
 
-            if subject not in GROUPME_TWO_WAY:
+            # Check for reasons to not send to groupme.
+            if not GROUPME_ENABLE:
+                _LOGGER.debug('attempting to send to groupme but groupme is disabled')
+                return
+            elif subject not in GROUPME_TWO_WAY:
+                _LOGGER.debug('aborting send to groupme outside of GROUPME_TWO_WAY')
                 return
             elif edit or delete:
+                _LOGGER.debug('aborting send due to edit or delete in send_to_groupme')
                 return
+
             _LOGGER.debug('sending to groupme')
 
             sent = dict()
