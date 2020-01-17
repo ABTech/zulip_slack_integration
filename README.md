@@ -20,3 +20,11 @@ docker run -d --rm -p 6379:6379 --name redis_master redis:5.0
 5. Edit `secrets.py` to configure the auth credentials for the above.
 6. Configure stream/channel/topic names into `PUBLIC_TWO_WAY`, `PUBLIC_TWO_WAY_STREAM`, `ZULIP_LOG_PUBLIC_STREAM`, `ZULIP_LOG_PRIVATE_STREAM`.
 7. If using Groupme, set `GROUPME_ENABLE` and the cert chain paths.
+
+## Hints
+
+If you want to run with debug logging, set the `LOGLEVEL` environment variable to `debug`, like so:
+
+```
+LOGLEVEL=debug python __init__.py
+```
