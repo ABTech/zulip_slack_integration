@@ -191,7 +191,7 @@ class SlackBridge():
                             data['text'] = old_text[:start]
                             data['text'] += '**@' + at_user + '**'
                             data['text'] += old_text[start + len(match):]
-                            at_shift = len(data['text']) - len(old_text)
+                            at_shift = len(data['text']) - len(old_text) + at_shift
                         else:
                             _LOGGER.info("couldn't find get @ user %s:",
                                          at_user_id)
