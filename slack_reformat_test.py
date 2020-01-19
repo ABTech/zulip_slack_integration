@@ -51,11 +51,54 @@ class TestSlackReformat(unittest.TestCase):
 
 
     def test_markdown_links(self):
-        # Demo only -- this is not implemented yet.
+        # Does nothing if it shouldn't
         self.assertEqual(
             slack_reformat.format_markdown_links('Plain Text'),
             'Plain Text'
         )
+
+        # Does nothing if there is a bare URL there
+        self.assertEqual(
+            slack_reformat.format_markdown_links('http://foo.com'),
+            'http://foo.com'
+        )
+
+        # Does nothing if there is a bare URL there, even in brackets
+        self.assertEqual(
+            slack_reformat.format_markdown_links('<http://foo.com>'),
+            '<http://foo.com>'
+        )
+
+        # Base case - just the URL
+        self.assertEqual(
+            slack_reformat.format_markdown_links('<http://foo.com|http://foo.com>'),
+            'http://foo.com'
+        )
+
+        # Base case - URL with display text
+        self.assertEqual(
+            slack_reformat.format_markdown_links('<http://foo.com|Display Text>'),
+            '[Display Text](http://foo.com)'
+        )
+
+        # One of each
+        self.assertEqual(
+            slack_reformat.format_markdown_links('Text <http://foo.com|http://foo.com> And <http://foo.com|Display Text> Done'),
+            'Text http://foo.com And [Display Text](http://foo.com) Done'
+        )
+
+        # Three replacements
+        self.assertEqual(
+            slack_reformat.format_markdown_links('Text <http://foo.com|http://foo.com> And <http://foo.com|Display Text> <http://bar.com|http://bar.com> Done'),
+            'Text http://foo.com And [Display Text](http://foo.com) http://bar.com Done'
+        )
+
+        # mailto: scheme works (i.e. leading // isn't required)
+        self.assertEqual(
+            slack_reformat.format_markdown_links('<mailto:x@x.com|mailto:x@x.com>'),
+            'mailto:x@x.com'
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

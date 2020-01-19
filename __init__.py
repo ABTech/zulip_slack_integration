@@ -206,6 +206,7 @@ class SlackBridge():
 
                 data['text'] = slack_reformat.format_notifications(data['text'])
                 data['text'] = slack_reformat.format_channels(data['text'])
+                data['text'] = slack_reformat.format_markdown_links(data['text'])
 
                 if (channel['type'] == 'channel' or
                         channel['type'] == 'private-channel'):
