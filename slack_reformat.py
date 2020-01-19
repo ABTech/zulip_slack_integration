@@ -1,12 +1,59 @@
 # Module to consolidate logic around reformatting messages that originate on
 # slack before they are forwarded.
 
+import logging
 import re
+import sys
+import traceback
 
+_LOGGER = logging.getLogger(__name__)
+
+# These are module-private regular expressions used by the reformatter
+_SLACK_USER_MATCH = re.compile("<@[A-Z0-9]+>")
 _SLACK_NOTIF_MATCH = re.compile("<![a-zA-Z0-9]+>")
 _SLACK_CHANNEL_MATCH = re.compile("<#[a-zA-Z0-9]+\\|[a-zA-Z0-9]+>")
 _SLACK_LINK_BARE_URL_MATCH = re.compile("<([a-zA-Z0-9]+:[^|]+)\\|\\1>")
 _SLACK_LINK_MATCH = re.compile("<([a-zA-Z0-9]+:[^|]+)\\|([^>]+)>")
+
+class SlackUserFormatter:
+    def __init__(self, user_lookup_function, log_on_error=True):
+        ''' Constructor.  user_lookup_function should return a couroutine that resolves to
+            the display name of the passed in user identifier. It may throw an exception on failure.'''
+        self._get_slack_user = user_lookup_function
+        self._log_on_error = log_on_error
+
+    async def format_user(self, input_text):
+        ''' Handles reformatting of slack markdown user references in a string of text. '''
+        at_shift = 0
+        for m in _SLACK_USER_MATCH.finditer(input_text):
+            match = m.group()
+            at_user_id = match[2:-1]
+            try:
+                at_user = await self._get_slack_user(at_user_id)
+
+                if at_user:
+                    old_text = input_text
+                    start = m.start() + at_shift
+                    input_text = old_text[:start]
+                    input_text += '**@' + at_user + '**'
+                    input_text += old_text[start + len(match):]
+                    at_shift = len(input_text) - len(old_text) + at_shift
+                else:
+                    _LOGGER.info("couldn't find get @ user %s:",
+                                 at_user_id)
+            except:
+                e = sys.exc_info()
+                exc_type, exc_value, exc_traceback = e
+                trace = repr(traceback.format_exception(exc_type,
+                                                        exc_value,
+                                                        exc_traceback))
+                if (self._log_on_error):
+                    _LOGGER.warning("couldn't find get @ user %s: %s",
+                                    at_user_id, trace)
+
+        return input_text
+
+
 
 def format_notifications(input_text):
     '''Handles reformatting of things like @here.  Note that this assumes that

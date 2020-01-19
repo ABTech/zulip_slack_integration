@@ -100,8 +100,6 @@ class SlackBridge():
     def __init__(self):
         _LOGGER.debug('new SlackBridge instance')
 
-        slack_user_match = re.compile("<@[A-Z0-9]+>")
-
         _LOGGER.debug('connecting to redis')
         self.redis = redis.Redis(
             host=REDIS_HOSTNAME,
@@ -178,32 +176,10 @@ class SlackBridge():
                                                        web_client=web_client)
                 if not channel:
                     return
-                at_shift = 0
-                for m in slack_user_match.finditer(data['text']):
-                    match = m.group()
-                    at_user_id = match[2:-1]
-                    try:
-                        at_user = await self.get_slack_user(at_user_id,
-                                                            web_client=web_client)
-                        if at_user:
-                            old_text = data['text']
-                            start = m.start() + at_shift
-                            data['text'] = old_text[:start]
-                            data['text'] += '**@' + at_user + '**'
-                            data['text'] += old_text[start + len(match):]
-                            at_shift = len(data['text']) - len(old_text) + at_shift
-                        else:
-                            _LOGGER.info("couldn't find get @ user %s:",
-                                         at_user_id)
-                    except:
-                        e = sys.exc_info()
-                        exc_type, exc_value, exc_traceback = e
-                        trace = repr(traceback.format_exception(exc_type,
-                                                                exc_value,
-                                                                exc_traceback))
-                        _LOGGER.warning("couldn't find get @ user %s: %s",
-                                        at_user_id, trace)
 
+                user_formatter = slack_reformat.SlackUserFormatter(
+                    lambda user_id: self.get_slack_user(user_id, web_client=web_client))
+                data['text'] = await user_formatter.format_user(data['text'])
                 data['text'] = slack_reformat.format_notifications(data['text'])
                 data['text'] = slack_reformat.format_channels(data['text'])
                 data['text'] = slack_reformat.format_markdown_links(data['text'])

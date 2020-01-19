@@ -1,8 +1,63 @@
+import asyncio
 import unittest
 
 import slack_reformat
 
 class TestSlackReformat(unittest.TestCase):
+    def test_format_user(self):
+        # Simple standin for the redis lookup.
+        async def user_lookup(id):
+            if id == '12345':
+                return 'Alice'
+            elif id == '54321':
+                return 'Bob'
+            elif id == 'ERROR':
+                raise NameError
+            else:
+                return False
+
+        user_formatter = slack_reformat.SlackUserFormatter(user_lookup, log_on_error=False)
+
+        # Shorthand for doing an await in a unittest.
+        do_await = asyncio.get_event_loop().run_until_complete
+
+        # Null Case
+        self.assertEqual(
+            do_await(user_formatter.format_user('Plain Text')),
+            'Plain Text'
+        )
+
+        # Just Alice
+        self.assertEqual(
+            do_await(user_formatter.format_user('Hi <@12345>')),
+            'Hi **@Alice**'
+        )
+
+        # Unknown user
+        self.assertEqual(
+            do_await(user_formatter.format_user('Hi <@Unknown>')),
+            'Hi <@Unknown>'
+        )
+
+        # Multiple Names
+        self.assertEqual(
+            do_await(user_formatter.format_user('Hi <@12345> and <@54321> and <@12345>!')),
+            'Hi **@Alice** and **@Bob** and **@Alice**!'
+        )
+
+        # Simple error case -- should just hand back the original
+        self.assertEqual(
+            do_await(user_formatter.format_user('Hi <@ERROR>')),
+            'Hi <@ERROR>'
+        )
+
+        # Error on second name should still convert other non-error ones.
+        self.assertEqual(
+            do_await(user_formatter.format_user('Hi <@12345> and <@ERROR> and <@54321>!')),
+            'Hi **@Alice** and <@ERROR> and **@Bob**!'
+        )
+
+
     def test_format_notifications(self):
         # No groups in text
         self.assertEqual(
@@ -21,6 +76,7 @@ class TestSlackReformat(unittest.TestCase):
             slack_reformat.format_notifications('<!here> Ping <!everyone> Loud <!channel>!'),
             '**@here** Ping **@everyone** Loud **@channel**!'
         )
+
 
     def test_format_channels(self):
         # No channels in text
@@ -47,7 +103,6 @@ class TestSlackReformat(unittest.TestCase):
             slack_reformat.format_channels('<#C1234567|channel1> <#C12BB567|channel2> <#C12AA567|channel3>!'),
             '**#channel1** **#channel2** **#channel3**!'
         )
-
 
 
     def test_markdown_links(self):
