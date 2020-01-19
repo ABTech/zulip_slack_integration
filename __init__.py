@@ -15,6 +15,8 @@ import redis
 import slack
 import zulip
 
+import slack_reformat
+
 from secrets import (ZULIP_BOT_NAME, ZULIP_BOT_EMAIL,
                      ZULIP_API_KEY, ZULIP_URL,
                      SLACK_BOT_ID, SLACK_TOKEN, 
@@ -99,9 +101,6 @@ class SlackBridge():
         _LOGGER.debug('new SlackBridge instance')
 
         slack_user_match = re.compile("<@[A-Z0-9]+>")
-        slack_notif_match = re.compile("<![a-zA-Z0-9]+>")
-        slack_channel_match = re.compile("<#[a-zA-Z0-9]+\\|[a-zA-Z0-9]+>")
-        slack_link_match = re.compile("<[a-zA-Z0-9]+\\|[a-zA-Z0-9]+>")
 
         _LOGGER.debug('connecting to redis')
         self.redis = redis.Redis(
@@ -134,6 +133,7 @@ class SlackBridge():
         @slack.RTMClient.run_on(event='message')
         async def receive_slack_msg(**payload):
             _LOGGER.debug('caught slack message')
+            _LOGGER.debug('JSON: %s' % json.dumps(payload['data']))
             try:
                 data = payload['data']
                 web_client = payload['web_client']
@@ -191,7 +191,7 @@ class SlackBridge():
                             data['text'] = old_text[:start]
                             data['text'] += '**@' + at_user + '**'
                             data['text'] += old_text[start + len(match):]
-                            at_shift = len(data['text']) - len(old_text)
+                            at_shift = len(data['text']) - len(old_text) + at_shift
                         else:
                             _LOGGER.info("couldn't find get @ user %s:",
                                          at_user_id)
@@ -203,26 +203,10 @@ class SlackBridge():
                                                                 exc_traceback))
                         _LOGGER.warning("couldn't find get @ user %s: %s",
                                         at_user_id, trace)
-                notif_shift = 0
-                for m in slack_notif_match.finditer(data['text']):
-                    match = m.group()
-                    notif = match[2:-1]
-                    old_text = data['text']
-                    start = m.start() + notif_shift
-                    data['text'] = old_text[:start]
-                    data['text'] += '**@' + notif + '**'
-                    data['text'] += old_text[start + len(match):]
-                    notif_shift = len(data['text']) - len(old_text)
-                channel_shift = 0
-                for m in slack_channel_match.finditer(data['text']):
-                    match = m.group()
-                    ref_channel = (match[2:-1].split('|'))[1]
-                    old_text = data['text']
-                    start = m.start() + channel_shift
-                    data['text'] = old_text[:start]
-                    data['text'] += '**#' + ref_channel + '**'
-                    data['text'] += old_text[start + len(match):]
-                    channel_shift = len(data['text']) - len(old_text)
+
+                data['text'] = slack_reformat.format_notifications(data['text'])
+                data['text'] = slack_reformat.format_channels(data['text'])
+                data['text'] = slack_reformat.format_markdown_links(data['text'])
 
                 if (channel['type'] == 'channel' or
                         channel['type'] == 'private-channel'):
