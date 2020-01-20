@@ -119,6 +119,9 @@ class SlackBridge():
 #        self.zulip_ev_thread.setDaemon(True)
 #        self.zulip_ev_thread.start()
 
+        self.user_formatter = slack_reformat.SlackUserFormatter(
+            lambda user_id: self.get_slack_user(user_id, web_client=self.slack_web_client))
+
         if GROUPME_ENABLE:
             _LOGGER.debug('connecting to groupmes')
             self.groupme_threads = {}
@@ -177,12 +180,12 @@ class SlackBridge():
                 if not channel:
                     return
 
-                user_formatter = slack_reformat.SlackUserFormatter(
-                    lambda user_id: self.get_slack_user(user_id, web_client=web_client))
-                data['text'] = await user_formatter.format_user(data['text'])
-                data['text'] = await slack_reformat.format_notifications(data['text'])
-                data['text'] = await slack_reformat.format_channels(data['text'])
-                data['text'] = await slack_reformat.format_markdown_links(data['text'])
+                # Clean up formatting of message before we forward it.
+                # This does not deal with attachments,
+                # which are dealt with in a per-service way.
+                data['text'] = \
+                    await slack_reformat.reformat_slack_text(self.user_formatter,
+                                                             data['text'])
 
                 if (channel['type'] == 'channel' or
                         channel['type'] == 'private-channel'):

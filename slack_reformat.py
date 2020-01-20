@@ -15,9 +15,20 @@ _SLACK_CHANNEL_MATCH = re.compile("<#[a-zA-Z0-9]+\\|([a-zA-Z0-9]+)>")
 _SLACK_LINK_BARE_URL_MATCH = re.compile("<([a-zA-Z0-9]+:[^|]+)(\\|\\1){0,1}>")
 _SLACK_LINK_MATCH = re.compile("<([a-zA-Z0-9]+:[^|]+)(?:\\|([^>]+)){0,1}>")
 
+async def reformat_slack_text(user_formatter, input_text):
+    '''This helper method, given a SlackUserFormatter, will format the input_text
+       for transmission from Slack to other services.  Using it ensures that any dependencies
+       between the individual reformatters is obeyed. '''
+    input_text = await user_formatter.format_user(input_text)
+    input_text = await format_notifications(input_text)
+    input_text = await format_channels(input_text)
+    input_text = await format_markdown_links(input_text)
+
+    return input_text
+
 
 async def _do_transform(input_text,
-                  match_pattern, replace_func):
+                        match_pattern, replace_func):
     '''This method provides the basic work of finding parts of a slack message to replace with
        alternate markdown, and then getting them replaced.  Private to this module.
 
@@ -45,16 +56,16 @@ async def _do_transform(input_text,
 
 class SlackUserFormatter:
     def __init__(self, user_lookup_function, log_on_error=True):
-        ''' Constructor.  user_lookup_function should return a couroutine that resolves to
+        '''Constructor.  user_lookup_function should return a couroutine that resolves to
             the display name of the passed in user identifier. It may throw an exception on failure.'''
         self._get_slack_user = user_lookup_function
         self._log_on_error = log_on_error
 
     async def format_user(self, input_text):
-        ''' Handles reformatting of slack markdown user references in a string of text. '''
+        '''Handles reformatting of slack markdown user references in a string of text. '''
 
         async def user_reformat(m):
-            ''' User reformat helper function for _do_transform. '''
+            '''User reformat helper function for _do_transform. '''
             match = m.group()
             at_user_id = match[2:-1]
 

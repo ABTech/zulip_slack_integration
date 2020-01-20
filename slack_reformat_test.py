@@ -7,6 +7,24 @@ import slack_reformat
 do_await = asyncio.get_event_loop().run_until_complete
 
 class TestSlackReformat(unittest.TestCase):
+    def test_reformat_slack_text(self):
+        # Simple standin for the redis lookup.
+        async def user_lookup(id):
+            if id == '12345':
+                return 'Alice'
+            else:
+                return False
+
+        user_formatter = slack_reformat.SlackUserFormatter(user_lookup, log_on_error=False)
+
+        # Just check one of everything to make sure it all works.
+        self.assertEqual(
+            do_await(
+                slack_reformat.reformat_slack_text(user_formatter,
+                    'User <@12345> Channel <#C123G567|channel> Notif <!here> Link <http://foo.com>')),
+            'User **@Alice** Channel **#channel** Notif **@here** Link http://foo.com')
+
+
     def test_format_user(self):
         # Simple standin for the redis lookup.
         async def user_lookup(id):
