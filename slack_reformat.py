@@ -52,20 +52,17 @@ class SlackUserFormatter:
 
     async def format_user(self, input_text):
         ''' Handles reformatting of slack markdown user references in a string of text. '''
-        at_shift = 0
-        for m in _SLACK_USER_MATCH.finditer(input_text):
+
+        async def user_reformat(m):
+            ''' User reformat helper function for _do_transform. '''
             match = m.group()
             at_user_id = match[2:-1]
+
             try:
                 at_user = await self._get_slack_user(at_user_id)
 
                 if at_user:
-                    old_text = input_text
-                    start = m.start() + at_shift
-                    input_text = old_text[:start]
-                    input_text += '**@' + at_user + '**'
-                    input_text += old_text[start + len(match):]
-                    at_shift = len(input_text) - len(old_text) + at_shift
+                    return '**@%s**' % at_user
                 else:
                     _LOGGER.info("couldn't find get @ user %s:",
                                  at_user_id)
@@ -79,7 +76,12 @@ class SlackUserFormatter:
                     _LOGGER.warning("couldn't find get @ user %s: %s",
                                     at_user_id, trace)
 
-        return input_text
+            # in failure cases, just return the original text
+            return match
+
+        return await _do_transform(input_text,
+                                   _SLACK_USER_MATCH,
+                                   user_reformat)
 
 
 async def format_notifications(input_text):
