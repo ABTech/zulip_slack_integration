@@ -180,9 +180,9 @@ class SlackBridge():
                 user_formatter = slack_reformat.SlackUserFormatter(
                     lambda user_id: self.get_slack_user(user_id, web_client=web_client))
                 data['text'] = await user_formatter.format_user(data['text'])
-                data['text'] = slack_reformat.format_notifications(data['text'])
-                data['text'] = slack_reformat.format_channels(data['text'])
-                data['text'] = slack_reformat.format_markdown_links(data['text'])
+                data['text'] = await slack_reformat.format_notifications(data['text'])
+                data['text'] = await slack_reformat.format_channels(data['text'])
+                data['text'] = await slack_reformat.format_markdown_links(data['text'])
 
                 if (channel['type'] == 'channel' or
                         channel['type'] == 'private-channel'):
