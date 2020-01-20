@@ -16,7 +16,7 @@ _SLACK_LINK_BARE_URL_MATCH = re.compile("<([a-zA-Z0-9]+:[^|]+)(\\|\\1){0,1}>")
 _SLACK_LINK_MATCH = re.compile("<([a-zA-Z0-9]+:[^|]+)(?:\\|([^>]+)){0,1}>")
 
 
-def _do_transform(input_text,
+async def _do_transform(input_text,
                   match_pattern, replace_func):
     '''This method provides the basic work of finding parts of a slack message to replace with
        alternate markdown, and then getting them replaced.  Private to this module.
@@ -36,7 +36,7 @@ def _do_transform(input_text,
         start = m.start() + transform_shift
 
         input_text = old_text[:start]
-        input_text += replace_func(m)
+        input_text += await replace_func(m)
         input_text += old_text[start + len(match):]
 
         transform_shift = len(input_text) - len(old_text) + transform_shift
@@ -82,20 +82,30 @@ class SlackUserFormatter:
         return input_text
 
 
-def format_notifications(input_text):
+async def format_notifications(input_text):
     '''Handles reformatting of things like @here.  Note that this assumes that
        any groups have already been filtered out, as they use a similar format
        but would need the ID to be looked up.'''
-    return _do_transform(input_text, _SLACK_NOTIF_MATCH, lambda m: ('**@%s**' % m.group(1)))
+    async def notification_reformat(m):
+        return ('**@%s**' % m.group(1))
+
+    return await _do_transform(input_text,
+                               _SLACK_NOTIF_MATCH,
+                               notification_reformat)
 
 
-def format_channels(input_text):
+async def format_channels(input_text):
     '''Finds anything that looks like a slack channel in the text, and replaces
        it with a bolded version.  Returns the new text.'''
-    return _do_transform(input_text, _SLACK_CHANNEL_MATCH, lambda m: ('**#%s**' % m.group(1)))
+    async def channel_reformat(m):
+        return ('**#%s**' % m.group(1))
+
+    return await _do_transform(input_text,
+                               _SLACK_CHANNEL_MATCH,
+                               channel_reformat)
 
 
-def format_markdown_links(input_text):
+async def format_markdown_links(input_text):
     '''Finds anything that looks like a markdown link in the text.
 
        If the display text is identical to the URL, we just remove all the markdown
@@ -109,7 +119,7 @@ def format_markdown_links(input_text):
        <http://foo.com>
 
        Returns the new text.'''
-    def replace_markdown_link(m):
+    async def replace_markdown_link(m):
         match = m.group()
         bare_url_match = _SLACK_LINK_BARE_URL_MATCH.match(match)
 
@@ -122,4 +132,6 @@ def format_markdown_links(input_text):
 
         return replacement
 
-    return _do_transform(input_text, _SLACK_LINK_MATCH, replace_markdown_link)
+    return await _do_transform(input_text,
+                               _SLACK_LINK_MATCH,
+                               replace_markdown_link)
