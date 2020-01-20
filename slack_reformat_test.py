@@ -118,13 +118,13 @@ class TestSlackReformat(unittest.TestCase):
             'http://foo.com'
         )
 
-        # Does nothing if there is a bare URL there, even in brackets
+        # Base case - just the URL without a piped display name just gets its brackets stripped.
         self.assertEqual(
             slack_reformat.format_markdown_links('<http://foo.com>'),
-            '<http://foo.com>'
+            'http://foo.com'
         )
 
-        # Base case - just the URL
+        # Base case - just the URL with a duplicated display name
         self.assertEqual(
             slack_reformat.format_markdown_links('<http://foo.com|http://foo.com>'),
             'http://foo.com'
