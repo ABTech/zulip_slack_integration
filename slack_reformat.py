@@ -164,8 +164,13 @@ def format_files_from_slack(files):
 
     for file in files:
         if 'name' in file and file['name']:
-            output['markdown'] += f"\n*(Bridged Message included file: {file['name']})*"
-            output['plaintext'] += f"\n(Bridged Message included file: {file['name']})"
+            output['markdown'] += f"\n*(Bridged Message included file: {file['name']}"
+            output['plaintext'] += f"\n(Bridged Message included file: {file['name']}"
+            if 'title' in file and file['title']:
+                output['markdown'] += f": '{file['title']}'"
+                output['plaintext'] += f": '{file['title']}'"
+            output['markdown'] += ")*"
+            output['plaintext'] += ")"
 
     return output
 

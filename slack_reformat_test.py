@@ -190,13 +190,12 @@ class TestSlackReformat(unittest.TestCase):
         self.assertEqual(output['plaintext'], '')
         self.assertEqual(output['markdown'], '')
 
-        # Single file
+        # Single file, no title
         test_file = {
             "id": "U0000000",
             "created": 1579621511,
             "timestamp": 1579621511,
             "name": "filename.jpg",
-            "title": "filename.jpg",
             "mimetype": "image/jpeg",
             "filetype": "jpg",
             "pretty_type": "JPEG",
@@ -216,6 +215,12 @@ class TestSlackReformat(unittest.TestCase):
         output = slack_reformat.format_files_from_slack([test_file])
         self.assertEqual(output['plaintext'], '\n(Bridged Message included file: filename.jpg)')
         self.assertEqual(output['markdown'], '\n*(Bridged Message included file: filename.jpg)*')
+
+        # Add a title to the above:
+        test_file['title'] = 'File Title'
+        output = slack_reformat.format_files_from_slack([test_file])
+        self.assertEqual(output['plaintext'], '\n(Bridged Message included file: filename.jpg: \'File Title\')')
+        self.assertEqual(output['markdown'], '\n*(Bridged Message included file: filename.jpg: \'File Title\')*')
 
         # Deleted file
         test_file = {
