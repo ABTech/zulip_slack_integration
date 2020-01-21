@@ -176,6 +176,51 @@ class TestSlackReformat(unittest.TestCase):
             'mailto:x@x.com'
         )
 
+    def test_format_files_from_slack(self):
+        # Note: This test is _not_ exhaustive!
+
+        # Base case
+        output = slack_reformat.format_files_from_slack([])
+        self.assertEqual(output['plaintext'], '')
+        self.assertEqual(output['markdown'], '')
+
+        # Single file
+        test_file = {
+            "id": "U0000000",
+            "created": 1579621511,
+            "timestamp": 1579621511,
+            "name": "filename.jpg",
+            "title": "filename.jpg",
+            "mimetype": "image/jpeg",
+            "filetype": "jpg",
+            "pretty_type": "JPEG",
+            "user": "U1111111",
+            "editable": False,
+            "size": 750000,
+            "mode": "hosted",
+            "is_external": False,
+            "external_type": "",
+            "is_public": False,
+            "public_url_shared": False,
+            "display_as_bot": False,
+            "username": "",
+            "url_private": "https://files.slack.com/files-pri/T0000000-F0000000/filename.jpg"
+            # ... and many omitted fields
+        }
+        output = slack_reformat.format_files_from_slack([test_file])
+        self.assertEqual(output['plaintext'], '\n(Bridged Message included file: filename.jpg)')
+        self.assertEqual(output['markdown'], '\n*(Bridged Message included file: filename.jpg)*')
+
+        # Deleted file
+        test_file = {
+            "id": "U0000000",
+            "mode": "tombstone",
+        }
+        output = slack_reformat.format_files_from_slack([test_file])
+        self.assertEqual(output['plaintext'], '')
+        self.assertEqual(output['markdown'], '')
+
+
     def test_format_attachments_for_zulip(self):
         # Note: This test is _not_ exhaustive!
 

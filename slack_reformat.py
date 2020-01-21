@@ -150,6 +150,23 @@ async def format_markdown_links(input_text):
                                _SLACK_LINK_MATCH,
                                replace_markdown_link)
 
+
+def format_files_from_slack(files=[]):
+    '''Given a list of files from the slack API, return both a markdown and plaintext
+       string representation of those files.'''
+    # TODO: This function should ideally interface with a CDN and actually move the files to a
+    # public location.  For now, we just avoid hiding the presense of a file in the message.
+    output = { 'markdown': '',
+               'plaintext': '' }
+
+    for file in files:
+        if 'name' in file and file['name']:
+            output['markdown'] += f"\n*(Bridged Message included file: {file['name']})*"
+            output['plaintext'] += f"\n(Bridged Message included file: {file['name']})"
+
+    return output
+
+
 async def format_attachments_for_zulip(message_text, attachments, edit_or_delete, user_formatter):
     '''Translate a slack-style attachments list into text to be appended to a zulip message &
        append it to message_text, returning the result.'''
