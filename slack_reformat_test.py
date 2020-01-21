@@ -191,11 +191,12 @@ class TestSlackReformat(unittest.TestCase):
         self.assertEqual(output['markdown'], '')
 
         # Single file, no title
+        test_filename = 'filename.jpg'
         test_file = {
             "id": "U0000000",
             "created": 1579621511,
             "timestamp": 1579621511,
-            "name": "filename.jpg",
+            "name": test_filename,
             "mimetype": "image/jpeg",
             "filetype": "jpg",
             "pretty_type": "JPEG",
@@ -216,7 +217,12 @@ class TestSlackReformat(unittest.TestCase):
         self.assertEqual(output['plaintext'], '\n(Bridged Message included file: filename.jpg)')
         self.assertEqual(output['markdown'], '\n*(Bridged Message included file: filename.jpg)*')
 
-        # Add a title to the above:
+        # If we have a title that matches the filename, it should not be displayed.
+        test_file['title'] = test_filename
+        self.assertEqual(output['plaintext'], '\n(Bridged Message included file: filename.jpg)')
+        self.assertEqual(output['markdown'], '\n*(Bridged Message included file: filename.jpg)*')
+
+        # Add a distinct title to the above:
         test_file['title'] = 'File Title'
         output = slack_reformat.format_files_from_slack([test_file])
         self.assertEqual(output['plaintext'], '\n(Bridged Message included file: filename.jpg: \'File Title\')')
