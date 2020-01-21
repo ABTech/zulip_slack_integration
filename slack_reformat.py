@@ -213,8 +213,10 @@ async def format_attachments_from_slack(message_text, attachments, edit_or_delet
                     output['markdown'] += f"**{attachment['title']}**\n"
                     output['plaintext'] += f"{attachment['title']}\n"
                 if 'text' in attachment:
-                    output['markdown'] += attachment['text'] + '\n'
-                    output['plaintext'] += attachment['text'] + '\n'
+                    text_formatted = \
+                        await reformat_slack_text(user_formatter, attachment['text'])
+                    output['markdown'] += f"{text_formatted}\n"
+                    output['plaintext'] += f"{text_formatted}\n"
                 if 'image_url' in attachment:
                     output['markdown'] += f"[Image]({attachment['image_url']})\n"
                     output['plaintext'] += f"(Image: {attachment['image_url']})\n"
@@ -224,11 +226,15 @@ async def format_attachments_from_slack(message_text, attachments, edit_or_delet
                             output['markdown'] += f"**{field['title']}**\n"
                             output['plaintext'] += f"{field['title']}\n"
                         if 'value' in field:
-                            output['markdown'] += f"{field['value']}\n"
-                            output['plaintext'] += f"{field['value']}\n"
+                            field_value_formatted = \
+                                await reformat_slack_text(user_formatter, field['value'])
+                            output['markdown'] += f"{field_value_formatted}\n"
+                            output['plaintext'] += f"{field_value_formatted}\n"
                 if 'footer' in attachment:
-                    output['markdown'] += f"*{attachment['footer']}*"
-                    output['plaintext'] += f"{attachment['footer']}"
+                    footer_formatted = \
+                        await reformat_slack_text(user_formatter, attachment['footer'])
+                    output['markdown'] += f"*{footer_formatted}*"
+                    output['plaintext'] += f"{footer_formatted}"
                 if 'footer' in attachment and 'ts' in attachment:
                     output['markdown'] += " | "
                     output['plaintext'] += " | "

@@ -6,21 +6,22 @@ import slack_reformat
 # Shorthand for doing an await in a unittest.
 do_await = asyncio.get_event_loop().run_until_complete
 
+# Simple standin for the redis lookup.
+async def _trivial_user_lookup(id):
+    if id == '12345':
+        return 'Alice'
+    else:
+        return False
+
+_trivial_user_formatter = slack_reformat.SlackUserFormatter(
+    _trivial_user_lookup, log_on_error=False)
+
 class TestSlackReformat(unittest.TestCase):
     def test_reformat_slack_text(self):
-        # Simple standin for the redis lookup.
-        async def user_lookup(id):
-            if id == '12345':
-                return 'Alice'
-            else:
-                return False
-
-        user_formatter = slack_reformat.SlackUserFormatter(user_lookup, log_on_error=False)
-
         # Just check one of everything to make sure it all works.
         self.assertEqual(
             do_await(
-                slack_reformat.reformat_slack_text(user_formatter,
+                slack_reformat.reformat_slack_text(_trivial_user_formatter,
                     'User <@12345> Channel <#C123G567|channel> Notif <!here> Link <http://foo.com>')),
             'User **@Alice** Channel **#channel** Notif **@here** Link http://foo.com')
 
@@ -230,15 +231,16 @@ class TestSlackReformat(unittest.TestCase):
         # Note: This test is _not_ exhaustive!
 
         # Base case -- no attachments
-        output = do_await(slack_reformat.format_attachments_from_slack('message', [], False, None))
+        output = do_await(slack_reformat.format_attachments_from_slack(
+            'message', [], False, _trivial_user_formatter))
         self.assertEqual(output['plaintext'], '')
         self.assertEqual(output['markdown'], '')
 
-        # Link preview attachment.
+        # Link preview attachment.  This is built so that the text section needs to be reformatted.
         google_link_preview = {
             'title': 'Google',
             'title_link': 'http://www.google.com/',
-            'text': 'Search the world\'s information',
+            'text': 'Search the world\'s information at <http://www.google.com>',
             'fallback': 'Google',
             'from_url': 'http://www.google.com/',
             'service_icon': 'http://www.google.com/favicon.ico',
@@ -247,18 +249,20 @@ class TestSlackReformat(unittest.TestCase):
             'original_url': 'http://www.google.com'
         }
         output = do_await(slack_reformat.format_attachments_from_slack(
-            'message', [google_link_preview], False, None))
+            'message', [google_link_preview], False, _trivial_user_formatter))
         self.assertEqual(
             output['markdown'],
-            '\n\n```quote\n**[Google](http://www.google.com/)**\nSearch the world\'s information\n```'
+            '\n\n```quote\n**[Google](http://www.google.com/)**\nSearch the world\'s information at http://www.google.com\n```'
         )
         self.assertEqual(
             output['plaintext'],
-            '\n\nGoogle: http://www.google.com/\nSearch the world\'s information\n'
+            '\n\nGoogle: http://www.google.com/\nSearch the world\'s information at http://www.google.com\n'
         )
 
 
         # Github app attachment
+        #
+        # Note: correct behavior here requres that footers _also_ get the basic slack formatting rewrite.
         github_app_attachment = {
             "fallback": "ABTech/zulip_slack_integration",
             "title": "ABTech/zulip_slack_integration",
@@ -282,14 +286,14 @@ class TestSlackReformat(unittest.TestCase):
             "is_app_unfurl": True
         }
         output = do_await(slack_reformat.format_attachments_from_slack(
-            'message', [github_app_attachment], False, None))
+            'message', [github_app_attachment], False, _trivial_user_formatter))
         self.assertEqual(
             output['markdown'],
-            '\n\n```quote\n**ABTech/zulip_slack_integration**\n**Stars**\n1\n**Language**\nPython\n*<https://github.com/ABTech/zulip_slack_integration|ABTech/zulip_slack_integration>* | *Thu May 23 14:35:12 2019*\n```'
+            '\n\n```quote\n**ABTech/zulip_slack_integration**\n**Stars**\n1\n**Language**\nPython\n*[ABTech/zulip_slack_integration](https://github.com/ABTech/zulip_slack_integration)* | *Thu May 23 14:35:12 2019*\n```'
         )
         self.assertEqual(
             output['plaintext'],
-            '\n\nABTech/zulip_slack_integration\nStars\n1\nLanguage\nPython\n<https://github.com/ABTech/zulip_slack_integration|ABTech/zulip_slack_integration> | Thu May 23 14:35:12 2019\n'
+            '\n\nABTech/zulip_slack_integration\nStars\n1\nLanguage\nPython\n[ABTech/zulip_slack_integration](https://github.com/ABTech/zulip_slack_integration) | Thu May 23 14:35:12 2019\n'
         )
 
 if __name__ == '__main__':
