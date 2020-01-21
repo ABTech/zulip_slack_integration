@@ -1,6 +1,7 @@
 # Module to consolidate logic around reformatting messages that originate on
 # slack before they are forwarded.
 
+import datetime
 import logging
 import re
 import sys
@@ -148,3 +149,70 @@ async def format_markdown_links(input_text):
     return await _do_transform(input_text,
                                _SLACK_LINK_MATCH,
                                replace_markdown_link)
+
+async def format_attachments_for_zulip(message_text, attachments, edit_or_delete, user_formatter):
+    '''Translate a slack-style attachments list into text to be appended to a zulip message &
+       append it to message_text, returning the result.'''
+    attach_txt = ''
+    if len(attachments) > 0:
+        if edit_or_delete or len(message_text) > 0:
+            attach_txt += '\n\n'
+        for attach_i in range(len(attachments)):
+            if attach_i > 0:
+                attach_txt += '\n\n'
+            attachment = attachments[attach_i]
+            if 'pretext' in attachment:
+                attach_txt += attachment['pretext'] + '\n'
+            if ('text' in attachment or 'title' in attachment or
+                    'author_name' in attachment):
+                if (not edit_or_delete and not len(message_text) > 0
+                    and 'pretext' not in attachment):
+                    attach_txt += '\n'
+                attach_txt += '```quote\n'
+                if 'author_link' in attachment:
+                    attach_txt += f"[{attachment['author_name']}]({attachment['author_link']})\n"
+                elif 'author_name' in attachment:
+                    attach_txt += f"{attachment['author_name']}\n"
+                if 'title_link' in attachment:
+                    attach_txt += f"**[{attachment['title']}]({attachment['title_link']})**\n"
+                elif 'title' in attachment:
+                    attach_txt += f"**{attachment['title']}**\n"
+                if 'text' in attachment:
+                    attach_txt += attachment['text'] + '\n'
+                if 'image_url' in attachment:
+                    attach_txt += f"[Image]({attachment['image_url']})\n"
+                if 'fields' in attachment:
+                    for field in attachment['fields']:
+                        if 'title' in field:
+                            attach_txt += f"**{field['title']}**\n"
+                        if 'value' in field:
+                            attach_txt += f"{field['value']}\n"
+                if 'footer' in attachment:
+                    attach_txt += f"*{attachment['footer']}*"
+                if 'footer' in attachment and 'ts' in attachment:
+                    attach_txt += " | "
+                if 'ts' in attachment:
+                    out_time = datetime.datetime.fromtimestamp(attachment['ts']).strftime('%c')
+                    attach_txt += f"*{out_time}*"
+                if 'footer' in attachment or 'ts' in attachment:
+                    attach_txt += "\n"
+                attach_txt += '```'
+
+    return message_text + attach_txt
+
+async def format_attachments_for_groupme(message_text, attachments, edit_or_delete, user_formatter):
+    '''Translate a slack-style attachments list into text to be appended to a groupme message &
+       append it to message_text, returning the result.'''
+    # Placeholder for now.
+
+    # Copied from never-used code in send_to_groupme:
+    #
+    # Check for image
+    #    for attachment in msg['attachments']:
+    #        # Add link to image to message text
+    #        if attachment['type'] == 'image':
+    #            caption = message_text if message_text else 'image'
+    #            message_text = '[%s](%s)\n' % (caption, attachment['url'])
+    #            break
+
+    return message_text

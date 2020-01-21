@@ -176,6 +176,68 @@ class TestSlackReformat(unittest.TestCase):
             'mailto:x@x.com'
         )
 
+    def test_format_attachments_for_zulip(self):
+        # Note: This test is _not_ exhaustive!
+
+        # Base case
+        self.assertEqual(
+            do_await(slack_reformat.format_attachments_for_zulip('message', [], False, None)),
+            'message'
+        )
+
+        # Link preview attachment.
+        google_link_preview = {
+            'title': 'Google',
+            'title_link': 'http://www.google.com/',
+            'text': 'Search the world\'s information',
+            'fallback': 'Google',
+            'from_url': 'http://www.google.com/',
+            'service_icon': 'http://www.google.com/favicon.ico',
+            'service_name': 'google.com',
+            'id': 1,
+            'original_url': 'http://www.google.com'
+        }
+        self.assertEqual(
+            do_await(slack_reformat.format_attachments_for_zulip(
+                'message', [google_link_preview], False, None)),
+            'message\n\n```quote\n**[Google](http://www.google.com/)**\nSearch the world\'s information\n```'
+        )
+
+        # Github app attachment
+        github_app_attachment = {
+            "fallback": "ABTech/zulip_slack_integration",
+            "title": "ABTech/zulip_slack_integration",
+            "footer": "<https://github.com/ABTech/zulip_slack_integration|ABTech/zulip_slack_integration>",
+            "id": 1,
+            "footer_icon": "https://github.githubassets.com/favicon.ico",
+            "ts": 1558647312,
+            "color": "24292f",
+            "fields": [{
+                    "title": "Stars",
+                    "value": "1",
+                    "short": True
+                }, {
+                    "title": "Language",
+                    "value": "Python",
+                    "short": True
+                }],
+            "mrkdwn_in": ["text", "fields"],
+            "bot_id": "BSWPYJGUF",
+            "app_unfurl_url": "https://github.com/ABTech/zulip_slack_integration",
+            "is_app_unfurl": True
+        }
+        self.assertEqual(
+            do_await(slack_reformat.format_attachments_for_zulip(
+                'message', [github_app_attachment], False, None)),
+            'message\n\n```quote\n**ABTech/zulip_slack_integration**\n**Stars**\n1\n**Language**\nPython\n*<https://github.com/ABTech/zulip_slack_integration|ABTech/zulip_slack_integration>* | *Thu May 23 14:35:12 2019*\n```'
+            )
+
+    def test_format_attachments_for_groupme(self):
+        # This test is just a placeholder since the function called is a placeholder.
+        self.assertEqual(
+            do_await(slack_reformat.format_attachments_for_groupme('message', [], False, None)),
+            'message'
+        )
 
 if __name__ == '__main__':
     unittest.main()
