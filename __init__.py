@@ -252,9 +252,12 @@ class SlackBridge():
                     # will also filter to only the GROUPME_TWO_WAY channels
                     # within the send_to_groupme call.
                     if GROUPME_ENABLE:
+                        groupme_message_text = msg + formatted_files['plaintext']
+
                         groupme_message_text = \
                             await slack_reformat.format_attachments_for_groupme(
-                                msg, attachments, edit or delete, self.user_formatter)
+                                groupme_message_text, attachments,
+                                edit or delete, self.user_formatter)
                         self.send_to_groupme(
                             channel_name, groupme_message_text, user=user,
                             edit=edit, delete=delete, me=me)
