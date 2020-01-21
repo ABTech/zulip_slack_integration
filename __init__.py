@@ -226,9 +226,13 @@ class SlackBridge():
             #                else:
             #                    msg += '\n' + file['permalink_public']
 
+                    formatted_files = slack_reformat.format_files_from_slack(data['files'])
+                    zulip_message_text = msg + formatted_files['markdown']
+
                     zulip_message_text = \
                         await slack_reformat.format_attachments_for_zulip(
-                            msg, attachments, edit or delete, self.user_formatter)
+                            zulip_message_text, attachments,
+                            edit or delete, self.user_formatter)
 
                     if channel_name in PUBLIC_TWO_WAY:
                         self.send_to_zulip(
