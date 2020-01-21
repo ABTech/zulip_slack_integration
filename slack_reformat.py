@@ -151,9 +151,12 @@ async def format_markdown_links(input_text):
                                replace_markdown_link)
 
 
-def format_files_from_slack(files=[]):
+def format_files_from_slack(files):
     '''Given a list of files from the slack API, return both a markdown and plaintext
        string representation of those files.'''
+    if files == None:
+        files = []
+
     # TODO: This function should ideally interface with a CDN and actually move the files to a
     # public location.  For now, we just avoid hiding the presense of a file in the message.
     output = { 'markdown': '',
@@ -167,69 +170,76 @@ def format_files_from_slack(files=[]):
     return output
 
 
-async def format_attachments_for_zulip(message_text, attachments, edit_or_delete, user_formatter):
-    '''Translate a slack-style attachments list into text to be appended to a zulip message &
-       append it to message_text, returning the result.'''
-    attach_txt = ''
+async def format_attachments_from_slack(message_text, attachments, edit_or_delete, user_formatter):
+    '''Translate a slack-style attachments list into text to be appended to a zulip message
+       returning the result in both plaintext and markdown form.
+       
+       This method only uses the passed in message text to determine how to format its output
+       caller must append as appropriate.'''
+    output = { 'markdown': '',
+               'plaintext': '' }
+
     if len(attachments) > 0:
         if edit_or_delete or len(message_text) > 0:
-            attach_txt += '\n\n'
+            output['markdown'] += '\n\n'
+            output['plaintext'] += '\n\n'
         for attach_i in range(len(attachments)):
             if attach_i > 0:
-                attach_txt += '\n\n'
+                output['markdown'] += '\n\n'
+                output['plaintext'] += '\n\n'
             attachment = attachments[attach_i]
             if 'pretext' in attachment:
-                attach_txt += attachment['pretext'] + '\n'
-            if ('text' in attachment or 'title' in attachment or
+                output['markdown'] += attachment['pretext'] + '\n'
+                output['plaintext'] += attachment['pretext'] + '\n'
+            if ('text' in attachment or
+                    'title' in attachment or
                     'author_name' in attachment):
                 if (not edit_or_delete and not len(message_text) > 0
                     and 'pretext' not in attachment):
-                    attach_txt += '\n'
-                attach_txt += '```quote\n'
+                    output['markdown'] += '\n'
+                    output['plaintext'] += '\n'
+                output['markdown'] += '```quote\n'
+                # no need to extend output['plaintext'] in a similar way
                 if 'author_link' in attachment:
-                    attach_txt += f"[{attachment['author_name']}]({attachment['author_link']})\n"
+                    output['markdown'] += f"[{attachment['author_name']}]({attachment['author_link']})\n"
+                    output['plaintext'] += f"{attachment['author_name']}: {attachment['author_link']}\n"
                 elif 'author_name' in attachment:
-                    attach_txt += f"{attachment['author_name']}\n"
+                    output['markdown'] += f"{attachment['author_name']}\n"
+                    output['plaintext'] += f"{attachment['author_name']}\n"
                 if 'title_link' in attachment:
-                    attach_txt += f"**[{attachment['title']}]({attachment['title_link']})**\n"
+                    output['markdown'] += f"**[{attachment['title']}]({attachment['title_link']})**\n"
+                    output['plaintext'] += f"{attachment['title']}: {attachment['title_link']}\n"
                 elif 'title' in attachment:
-                    attach_txt += f"**{attachment['title']}**\n"
+                    output['markdown'] += f"**{attachment['title']}**\n"
+                    output['plaintext'] += f"{attachment['title']}\n"
                 if 'text' in attachment:
-                    attach_txt += attachment['text'] + '\n'
+                    output['markdown'] += attachment['text'] + '\n'
+                    output['plaintext'] += attachment['text'] + '\n'
                 if 'image_url' in attachment:
-                    attach_txt += f"[Image]({attachment['image_url']})\n"
+                    output['markdown'] += f"[Image]({attachment['image_url']})\n"
+                    output['plaintext'] += f"(Image: {attachment['image_url']})\n"
                 if 'fields' in attachment:
                     for field in attachment['fields']:
                         if 'title' in field:
-                            attach_txt += f"**{field['title']}**\n"
+                            output['markdown'] += f"**{field['title']}**\n"
+                            output['plaintext'] += f"{field['title']}\n"
                         if 'value' in field:
-                            attach_txt += f"{field['value']}\n"
+                            output['markdown'] += f"{field['value']}\n"
+                            output['plaintext'] += f"{field['value']}\n"
                 if 'footer' in attachment:
-                    attach_txt += f"*{attachment['footer']}*"
+                    output['markdown'] += f"*{attachment['footer']}*"
+                    output['plaintext'] += f"{attachment['footer']}"
                 if 'footer' in attachment and 'ts' in attachment:
-                    attach_txt += " | "
+                    output['markdown'] += " | "
+                    output['plaintext'] += " | "
                 if 'ts' in attachment:
                     out_time = datetime.datetime.fromtimestamp(attachment['ts']).strftime('%c')
-                    attach_txt += f"*{out_time}*"
+                    output['markdown'] += f"*{out_time}*"
+                    output['plaintext'] += f"{out_time}"
                 if 'footer' in attachment or 'ts' in attachment:
-                    attach_txt += "\n"
-                attach_txt += '```'
+                    output['markdown'] += "\n"
+                    output['plaintext'] += "\n"
+                output['markdown'] += '```'
+                # no need to extend output['plaintext'] in a similar way
 
-    return message_text + attach_txt
-
-async def format_attachments_for_groupme(message_text, attachments, edit_or_delete, user_formatter):
-    '''Translate a slack-style attachments list into text to be appended to a groupme message &
-       append it to message_text, returning the result.'''
-    # Placeholder for now.
-
-    # Copied from never-used code in send_to_groupme:
-    #
-    # Check for image
-    #    for attachment in msg['attachments']:
-    #        # Add link to image to message text
-    #        if attachment['type'] == 'image':
-    #            caption = message_text if message_text else 'image'
-    #            message_text = '[%s](%s)\n' % (caption, attachment['url'])
-    #            break
-
-    return message_text
+    return output

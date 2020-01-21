@@ -144,6 +144,7 @@ class SlackBridge():
                 delete = False
                 me = False
                 attachments = []
+                files = []
                 if (('subtype' in data and data['subtype'] == 'bot_message') or
                         ('bot_id' in data and 'user' not in data)):
                     bot_id = data['bot_id']
@@ -214,6 +215,9 @@ class SlackBridge():
                     if 'attachments' in data:
                         attachments = data['attachments']
 
+                    if 'files' in data:
+                        files = data['files']
+
                     # TODO: When real support for 'files' is implemented,
                     # it should probably be in the format_attachments_for_zulip
                     # call.
@@ -226,13 +230,15 @@ class SlackBridge():
             #                else:
             #                    msg += '\n' + file['permalink_public']
 
-                    formatted_files = slack_reformat.format_files_from_slack(data['files'])
-                    zulip_message_text = msg + formatted_files['markdown']
+                    formatted_attachments = \
+                        await slack_reformat.format_attachments_from_slack(
+                            msg, attachments,
+                            edit or delete, self.user_formatter)
+
+                    formatted_files = slack_reformat.format_files_from_slack(files)
 
                     zulip_message_text = \
-                        await slack_reformat.format_attachments_for_zulip(
-                            zulip_message_text, attachments,
-                            edit or delete, self.user_formatter)
+                        msg + formatted_attachments['markdown'] + formatted_files['markdown']
 
                     if channel_name in PUBLIC_TWO_WAY:
                         self.send_to_zulip(
@@ -252,12 +258,9 @@ class SlackBridge():
                     # will also filter to only the GROUPME_TWO_WAY channels
                     # within the send_to_groupme call.
                     if GROUPME_ENABLE:
-                        groupme_message_text = msg + formatted_files['plaintext']
-
                         groupme_message_text = \
-                            await slack_reformat.format_attachments_for_groupme(
-                                groupme_message_text, attachments,
-                                edit or delete, self.user_formatter)
+                            msg + formatted_attachments['plaintext'] + formatted_files['plaintext']
+
                         self.send_to_groupme(
                             channel_name, groupme_message_text, user=user,
                             edit=edit, delete=delete, me=me)

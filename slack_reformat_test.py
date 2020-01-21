@@ -179,6 +179,11 @@ class TestSlackReformat(unittest.TestCase):
     def test_format_files_from_slack(self):
         # Note: This test is _not_ exhaustive!
 
+        # None case
+        output = slack_reformat.format_files_from_slack(None)
+        self.assertEqual(output['plaintext'], '')
+        self.assertEqual(output['markdown'], '')
+
         # Base case
         output = slack_reformat.format_files_from_slack([])
         self.assertEqual(output['plaintext'], '')
@@ -221,14 +226,13 @@ class TestSlackReformat(unittest.TestCase):
         self.assertEqual(output['markdown'], '')
 
 
-    def test_format_attachments_for_zulip(self):
+    def test_format_attachments_from_slack(self):
         # Note: This test is _not_ exhaustive!
 
-        # Base case
-        self.assertEqual(
-            do_await(slack_reformat.format_attachments_for_zulip('message', [], False, None)),
-            'message'
-        )
+        # Base case -- no attachments
+        output = do_await(slack_reformat.format_attachments_from_slack('message', [], False, None))
+        self.assertEqual(output['plaintext'], '')
+        self.assertEqual(output['markdown'], '')
 
         # Link preview attachment.
         google_link_preview = {
@@ -242,11 +246,17 @@ class TestSlackReformat(unittest.TestCase):
             'id': 1,
             'original_url': 'http://www.google.com'
         }
+        output = do_await(slack_reformat.format_attachments_from_slack(
+            'message', [google_link_preview], False, None))
         self.assertEqual(
-            do_await(slack_reformat.format_attachments_for_zulip(
-                'message', [google_link_preview], False, None)),
-            'message\n\n```quote\n**[Google](http://www.google.com/)**\nSearch the world\'s information\n```'
+            output['markdown'],
+            '\n\n```quote\n**[Google](http://www.google.com/)**\nSearch the world\'s information\n```'
         )
+        self.assertEqual(
+            output['plaintext'],
+            '\n\nGoogle: http://www.google.com/\nSearch the world\'s information\n'
+        )
+
 
         # Github app attachment
         github_app_attachment = {
@@ -271,17 +281,15 @@ class TestSlackReformat(unittest.TestCase):
             "app_unfurl_url": "https://github.com/ABTech/zulip_slack_integration",
             "is_app_unfurl": True
         }
+        output = do_await(slack_reformat.format_attachments_from_slack(
+            'message', [github_app_attachment], False, None))
         self.assertEqual(
-            do_await(slack_reformat.format_attachments_for_zulip(
-                'message', [github_app_attachment], False, None)),
-            'message\n\n```quote\n**ABTech/zulip_slack_integration**\n**Stars**\n1\n**Language**\nPython\n*<https://github.com/ABTech/zulip_slack_integration|ABTech/zulip_slack_integration>* | *Thu May 23 14:35:12 2019*\n```'
-            )
-
-    def test_format_attachments_for_groupme(self):
-        # This test is just a placeholder since the function called is a placeholder.
+            output['markdown'],
+            '\n\n```quote\n**ABTech/zulip_slack_integration**\n**Stars**\n1\n**Language**\nPython\n*<https://github.com/ABTech/zulip_slack_integration|ABTech/zulip_slack_integration>* | *Thu May 23 14:35:12 2019*\n```'
+        )
         self.assertEqual(
-            do_await(slack_reformat.format_attachments_for_groupme('message', [], False, None)),
-            'message'
+            output['plaintext'],
+            '\n\nABTech/zulip_slack_integration\nStars\n1\nLanguage\nPython\n<https://github.com/ABTech/zulip_slack_integration|ABTech/zulip_slack_integration> | Thu May 23 14:35:12 2019\n'
         )
 
 if __name__ == '__main__':
