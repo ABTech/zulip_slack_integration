@@ -231,16 +231,18 @@ class SlackBridge():
                             msg, attachments, edit or delete, self.user_formatter)
 
                     if channel_name in PUBLIC_TWO_WAY:
-                        self.send_to_zulip(channel_name, zulip_message_text, user=user,
-                                           send_public=True, slack_id=msg_id,
-                                           edit=edit, delete=delete, me=me)
+                        self.send_to_zulip(
+                            channel_name, zulip_message_text, user=user,
+                            send_public=True, slack_id=msg_id,
+                            edit=edit, delete=delete, me=me)
 
                     # If we are not sending publicly, then we are sending for
                     # logging purposes, which might be disabled.
                     if ZULIP_LOG_ENABLE:
-                        self.send_to_zulip(channel_name, zulip_message_text, user=user,
-                                           slack_id=msg_id, edit=edit,
-                                           delete=delete, me=me, private=private)
+                        self.send_to_zulip(
+                            channel_name, zulip_message_text, user=user,
+                            slack_id=msg_id, edit=edit,
+                            delete=delete, me=me, private=private)
 
                     # If groupme is enabled, then send there.  Note that this
                     # will also filter to only the GROUPME_TWO_WAY channels
@@ -249,8 +251,9 @@ class SlackBridge():
                         groupme_message_text = \
                             await slack_reformat.format_attachments_for_groupme(
                                 msg, attachments, edit or delete, self.user_formatter)
-                        self.send_to_groupme(channel_name, groupme_message_text, user=user,
-                                             edit=edit, delete=delete, me=me)
+                        self.send_to_groupme(
+                            channel_name, groupme_message_text, user=user,
+                            edit=edit, delete=delete, me=me)
 
                 elif channel['type'] == 'im':
                     _LOGGER.debug('updating user display name')
