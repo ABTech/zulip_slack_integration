@@ -100,8 +100,6 @@ class SlackBridge():
     def __init__(self):
         _LOGGER.debug('new SlackBridge instance')
 
-        slack_user_match = re.compile("<@[A-Z0-9]+>")
-
         _LOGGER.debug('connecting to redis')
         self.redis = redis.Redis(
             host=REDIS_HOSTNAME,
@@ -120,6 +118,9 @@ class SlackBridge():
 #        self.zulip_ev_thread = threading.Thread(target=self.run_zulip_ev)
 #        self.zulip_ev_thread.setDaemon(True)
 #        self.zulip_ev_thread.start()
+
+        self.user_formatter = slack_reformat.SlackUserFormatter(
+            lambda user_id: self.get_slack_user(user_id, web_client=self.slack_web_client))
 
         if GROUPME_ENABLE:
             _LOGGER.debug('connecting to groupmes')
@@ -143,6 +144,7 @@ class SlackBridge():
                 delete = False
                 me = False
                 attachments = []
+                files = []
                 if (('subtype' in data and data['subtype'] == 'bot_message') or
                         ('bot_id' in data and 'user' not in data)):
                     bot_id = data['bot_id']
@@ -178,35 +180,13 @@ class SlackBridge():
                                                        web_client=web_client)
                 if not channel:
                     return
-                at_shift = 0
-                for m in slack_user_match.finditer(data['text']):
-                    match = m.group()
-                    at_user_id = match[2:-1]
-                    try:
-                        at_user = await self.get_slack_user(at_user_id,
-                                                            web_client=web_client)
-                        if at_user:
-                            old_text = data['text']
-                            start = m.start() + at_shift
-                            data['text'] = old_text[:start]
-                            data['text'] += '**@' + at_user + '**'
-                            data['text'] += old_text[start + len(match):]
-                            at_shift = len(data['text']) - len(old_text) + at_shift
-                        else:
-                            _LOGGER.info("couldn't find get @ user %s:",
-                                         at_user_id)
-                    except:
-                        e = sys.exc_info()
-                        exc_type, exc_value, exc_traceback = e
-                        trace = repr(traceback.format_exception(exc_type,
-                                                                exc_value,
-                                                                exc_traceback))
-                        _LOGGER.warning("couldn't find get @ user %s: %s",
-                                        at_user_id, trace)
 
-                data['text'] = slack_reformat.format_notifications(data['text'])
-                data['text'] = slack_reformat.format_channels(data['text'])
-                data['text'] = slack_reformat.format_markdown_links(data['text'])
+                # Clean up formatting of message before we forward it.
+                # This does not deal with attachments,
+                # which are dealt with in a per-service way.
+                data['text'] = \
+                    await slack_reformat.reformat_slack_text(self.user_formatter,
+                                                             data['text'])
 
                 if (channel['type'] == 'channel' or
                         channel['type'] == 'private-channel'):
@@ -234,6 +214,14 @@ class SlackBridge():
 
                     if 'attachments' in data:
                         attachments = data['attachments']
+
+                    if 'files' in data:
+                        files = data['files']
+
+                    # TODO: When real support for 'files' is implemented,
+                    # it should probably be in the format_attachments_for_zulip
+                    # call.
+
             #        if 'files' in data:
             #            for file in data['files']:
             #                web_client.files_sharedPublicURL(id=file['id'])
@@ -241,26 +229,41 @@ class SlackBridge():
             #                    msg = file['permalink_public']
             #                else:
             #                    msg += '\n' + file['permalink_public']
+
+                    formatted_attachments = \
+                        await slack_reformat.format_attachments_from_slack(
+                            msg, attachments,
+                            edit or delete, self.user_formatter)
+
+                    formatted_files = slack_reformat.format_files_from_slack(files)
+
+                    zulip_message_text = \
+                        msg + formatted_attachments['markdown'] + formatted_files['markdown']
+
                     if channel_name in PUBLIC_TWO_WAY:
-                        self.send_to_zulip(channel_name, msg, user=user,
-                                           send_public=True, slack_id=msg_id,
-                                           edit=edit, delete=delete, me=me,
-                                           attachments=attachments)
+                        self.send_to_zulip(
+                            channel_name, zulip_message_text, user=user,
+                            send_public=True, slack_id=msg_id,
+                            edit=edit, delete=delete, me=me)
 
                     # If we are not sending publicly, then we are sending for
                     # logging purposes, which might be disabled.
                     if ZULIP_LOG_ENABLE:
-                        self.send_to_zulip(channel_name, msg, user=user,
-                                           slack_id=msg_id, edit=edit,
-                                           delete=delete, me=me, private=private,
-                                           attachments=attachments)
+                        self.send_to_zulip(
+                            channel_name, zulip_message_text, user=user,
+                            slack_id=msg_id, edit=edit,
+                            delete=delete, me=me, private=private)
 
                     # If groupme is enabled, then send there.  Note that this
                     # will also filter to only the GROUPME_TWO_WAY channels
                     # within the send_to_groupme call.
                     if GROUPME_ENABLE:
-                        self.send_to_groupme(channel_name, msg, user=user,
-                                             edit=edit, delete=delete, me=me)
+                        groupme_message_text = \
+                            msg + formatted_attachments['plaintext'] + formatted_files['plaintext']
+
+                        self.send_to_groupme(
+                            channel_name, groupme_message_text, user=user,
+                            edit=edit, delete=delete, me=me)
 
                 elif channel['type'] == 'im':
                     _LOGGER.debug('updating user display name')
@@ -510,70 +513,17 @@ my records to use your new name when I forward messages to Zulip for you.",
     # originally from https://github.com/ABTech/zulip_groupme_integration/blob/7674a3595282ce154cd24b1903a44873d729e0cc/server.py
     def send_to_zulip(self, subject, msg, user=None, slack_id=None,
                       send_public=False, edit=False, delete=False, me=False,
-                      private=False, attachments=[]):
+                      private=False):
         _LOGGER.debug('sending to zulip, public: %s', str(send_public))
         try:
-            # Check for image
-        #    for attachment in msg['attachments']:
-        #        # Add link to image to message text
-        #        if attachment['type'] == 'image':
-        #            caption = message_text if message_text else 'image'
-        #            message_text = '[%s](%s)\n' % (caption, attachment['url'])
-        #            break
-
             sent = dict()
             zulip_id = None
             user_prefix = ''
-            attach_txt = ''
 
             if user is not None and not me:
                 user_prefix = '**' + user + '**: '
             elif user is not None and me:
                 user_prefix = '**' + user + '** '
-
-            if len(attachments) > 0:
-                if edit or delete or len(msg) > 0:
-                    attach_txt += '\n\n'
-                for attach_i in range(len(attachments)):
-                    if attach_i > 0:
-                        attach_txt += '\n\n'
-                    attachment = attachments[attach_i]
-                    if 'pretext' in attachment:
-                        attach_txt += attachment['pretext'] + '\n'
-                    if ('text' in attachment or 'title' in attachment or
-                            'author_name' in attachment):
-                        if (not edit and not delete and not len(msg) > 0 and
-                                'pretext' not in attachment):
-                            attach_txt += '\n'
-                        attach_txt += '```quote\n'
-                        if 'author_link' in attachment:
-                            attach_txt += f"[{attachment['author_name']}]({attachment['author_link']})\n"
-                        elif 'author_name' in attachment:
-                            attach_txt += f"{attachment['author_name']}\n"
-                        if 'title_link' in attachment:
-                            attach_txt += f"**[{attachment['title']}]({attachment['title_link']})**\n"
-                        elif 'title' in attachment:
-                            attach_txt += f"**{attachment['title']}**\n"
-                        if 'text' in attachment:
-                            attach_txt += attachment['text'] + '\n'
-                        if 'image_url' in attachment:
-                            attach_txt += f"[Image]({attachment['image_url']})\n"
-                        if 'fields' in attachment:
-                            for field in attachment['fields']:
-                                if 'title' in field:
-                                    attach_txt += f"**{field['title']}**\n"
-                                if 'value' in field:
-                                    attach_txt += f"{field['value']}\n"
-                        if 'footer' in attachment:
-                            attach_txt += f"*{attachment['footer']}*"
-                        if 'footer' in attachment and 'ts' in attachment:
-                            attach_txt += " | "
-                        if 'ts' in attachment:
-                            out_time = datetime.datetime.fromtimestamp(attachment['ts']).strftime('%c')
-                            attach_txt += f"*{out_time}*"
-                        if 'footer' in attachment or 'ts' in attachment:
-                            attach_txt += "\n"
-                        attach_txt += '```'
 
             to = ZULIP_LOG_PUBLIC_STREAM
             if send_public:
@@ -586,14 +536,14 @@ my records to use your new name when I forward messages to Zulip for you.",
                 if zulip_id is not None:
                     sent = self.zulip_client.update_message({
                         'message_id': int(zulip_id),
-                        "content": user_prefix + msg + attach_txt
+                        "content": user_prefix + msg
                     })
                 elif not send_public:
                     sent = self.zulip_client.send_message({
                         "type": 'stream',
                         "to": to,
                         "subject": subject,
-                        "content": f"{user_prefix}{msg} *(edited)*{attach_txt}"
+                        "content": f"{user_prefix}{msg} *(edited)*"
                     })
             elif edit and not slack_id and send_public:
                 # don't publish me_message edits publically
@@ -603,7 +553,7 @@ my records to use your new name when I forward messages to Zulip for you.",
                     "type": 'stream',
                     "to": to,
                     "subject": subject,
-                    "content": f"{user_prefix}{msg} *(edited)*{attach_txt}"
+                    "content": f"{user_prefix}{msg} *(edited)*"
                 })
             elif delete and slack_id:
                 redis_key = REDIS_MSG_SLACK_TO_ZULIP[to] + slack_id
@@ -613,21 +563,21 @@ my records to use your new name when I forward messages to Zulip for you.",
                 elif zulip_id is not None and not send_public:
                     sent = self.zulip_client.update_message({
                         'message_id': int(zulip_id),
-                        "content": f"{user_prefix}{msg} *(deleted)*{attach_txt}"
+                        "content": f"{user_prefix}{msg} *(deleted)*"
                     })
                 elif not send_public:
                     sent = self.zulip_client.send_message({
                         "type": 'stream',
                         "to": to,
                         "subject": subject,
-                        "content": f"{user_prefix}{msg} *(deleted)*{attach_txt}"
+                        "content": f"{user_prefix}{msg} *(deleted)*"
                     })
             else:
                 sent = self.zulip_client.send_message({
                     "type": 'stream',
                     "to": to,
                     "subject": subject,
-                    "content": user_prefix + msg + attach_txt
+                    "content": user_prefix + msg
 
                 })
             if 'result' not in sent or sent['result'] != 'success':
@@ -652,14 +602,6 @@ my records to use your new name when I forward messages to Zulip for you.",
     def send_to_groupme(self, subject, msg, user=None, edit=False,
                         delete=False, me=False):
         try:
-            # Check for image
-        #    for attachment in msg['attachments']:
-        #        # Add link to image to message text
-        #        if attachment['type'] == 'image':
-        #            caption = message_text if message_text else 'image'
-        #            message_text = '[%s](%s)\n' % (caption, attachment['url'])
-        #            break
-
             # Check for reasons to not send to groupme.
             if not GROUPME_ENABLE:
                 _LOGGER.debug('attempting to send to groupme but groupme is disabled')
