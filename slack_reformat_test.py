@@ -171,6 +171,21 @@ class TestSlackReformat(unittest.TestCase):
             'Text http://foo.com And [Display Text](http://foo.com) http://bar.com Done'
         )
 
+        # Two bare link replacements
+        self.assertEqual(
+            do_await(slack_reformat.format_markdown_links(
+                'Test <http://foo.com> <http://google.com>')),
+            'Test http://foo.com http://google.com'
+        )
+
+        # Multiple Links: Bare & Display Name & Display Name == Link
+        self.assertEqual(
+            do_await(slack_reformat.format_markdown_links(
+                'Test <http://foo.com> <http://google.com|The Goog> <http://bar.com|http://bar.com>')),
+            'Test http://foo.com [The Goog](http://google.com) http://bar.com'
+        )
+
+
         # mailto: scheme works (i.e. leading // isn't required)
         self.assertEqual(
             do_await(slack_reformat.format_markdown_links('<mailto:x@x.com|mailto:x@x.com>')),

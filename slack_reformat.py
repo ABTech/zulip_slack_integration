@@ -13,8 +13,8 @@ _LOGGER = logging.getLogger(__name__)
 _SLACK_USER_MATCH = re.compile("<@([A-Z0-9]+)>")
 _SLACK_NOTIF_MATCH = re.compile("<!([a-zA-Z0-9]+)>")
 _SLACK_CHANNEL_MATCH = re.compile("<#[a-zA-Z0-9]+\\|([a-zA-Z0-9]+)>")
-_SLACK_LINK_BARE_URL_MATCH = re.compile("<([a-zA-Z0-9]+:[^|]+)(\\|\\1){0,1}>")
-_SLACK_LINK_MATCH = re.compile("<([a-zA-Z0-9]+:[^|]+)(?:\\|([^>]+)){0,1}>")
+_SLACK_LINK_BARE_URL_MATCH = re.compile("<([a-zA-Z0-9]+:[^|>]+)(\\|\\1){0,1}>")
+_SLACK_LINK_MATCH = re.compile("<([a-zA-Z0-9]+:[^|>]+)(?:\\|([^>]+)){0,1}>")
 
 async def reformat_slack_text(user_formatter, input_text):
     '''This helper method, given a SlackUserFormatter, will format the input_text
