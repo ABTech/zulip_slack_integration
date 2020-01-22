@@ -196,12 +196,17 @@ class TestSlackReformat(unittest.TestCase):
         # Note: This test is _not_ exhaustive!
 
         # None case
-        output = slack_reformat.format_files_from_slack(None)
+        output = slack_reformat.format_files_from_slack(None, False)
+        self.assertEqual(output['plaintext'], '')
+        self.assertEqual(output['markdown'], '')
+
+        # None case, leading newline
+        output = slack_reformat.format_files_from_slack(None, True)
         self.assertEqual(output['plaintext'], '')
         self.assertEqual(output['markdown'], '')
 
         # Base case
-        output = slack_reformat.format_files_from_slack([])
+        output = slack_reformat.format_files_from_slack([], False)
         self.assertEqual(output['plaintext'], '')
         self.assertEqual(output['markdown'], '')
 
@@ -228,18 +233,31 @@ class TestSlackReformat(unittest.TestCase):
             "url_private": "https://files.slack.com/files-pri/T0000000-F0000000/filename.jpg"
             # ... and many omitted fields
         }
-        output = slack_reformat.format_files_from_slack([test_file])
+        output = slack_reformat.format_files_from_slack([test_file], True)
         self.assertEqual(output['plaintext'], '\n(Bridged Message included file: filename.jpg)')
         self.assertEqual(output['markdown'], '\n*(Bridged Message included file: filename.jpg)*')
 
+        # Same test, no leading newline.
+        output = slack_reformat.format_files_from_slack([test_file], False)
+        self.assertEqual(output['plaintext'], '(Bridged Message included file: filename.jpg)')
+        self.assertEqual(output['markdown'], '*(Bridged Message included file: filename.jpg)*')
+
+        # Multiple files.
+        output = slack_reformat.format_files_from_slack([test_file, test_file], False)
+        self.assertEqual(output['plaintext'],
+            '(Bridged Message included file: filename.jpg)\n(Bridged Message included file: filename.jpg)')
+        self.assertEqual(output['markdown'],
+            '*(Bridged Message included file: filename.jpg)*\n*(Bridged Message included file: filename.jpg)*')
+
         # If we have a title that matches the filename, it should not be displayed.
         test_file['title'] = test_filename
+        output = slack_reformat.format_files_from_slack([test_file], True)
         self.assertEqual(output['plaintext'], '\n(Bridged Message included file: filename.jpg)')
         self.assertEqual(output['markdown'], '\n*(Bridged Message included file: filename.jpg)*')
 
         # Add a distinct title to the above:
         test_file['title'] = 'File Title'
-        output = slack_reformat.format_files_from_slack([test_file])
+        output = slack_reformat.format_files_from_slack([test_file], True)
         self.assertEqual(output['plaintext'], '\n(Bridged Message included file: filename.jpg: \'File Title\')')
         self.assertEqual(output['markdown'], '\n*(Bridged Message included file: filename.jpg: \'File Title\')*')
 
@@ -248,7 +266,7 @@ class TestSlackReformat(unittest.TestCase):
             "id": "U0000000",
             "mode": "tombstone",
         }
-        output = slack_reformat.format_files_from_slack([test_file])
+        output = slack_reformat.format_files_from_slack([test_file], False)
         self.assertEqual(output['plaintext'], '')
         self.assertEqual(output['markdown'], '')
 

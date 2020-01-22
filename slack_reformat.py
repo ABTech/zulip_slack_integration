@@ -151,9 +151,12 @@ async def format_markdown_links(input_text):
                                replace_markdown_link)
 
 
-def format_files_from_slack(files):
+def format_files_from_slack(files, needs_leading_newline):
     '''Given a list of files from the slack API, return both a markdown and plaintext
-       string representation of those files.'''
+       string representation of those files.
+
+       This method only uses the passed in message text to determine how to format its output
+       caller must append as appropriate.'''
     if files == None:
         files = []
 
@@ -162,10 +165,17 @@ def format_files_from_slack(files):
     output = { 'markdown': '',
                'plaintext': '' }
 
+    first_file = True
     for file in files:
+        if not first_file or needs_leading_newline:
+            output['markdown'] += '\n'
+            output['plaintext'] += '\n'
+        else:
+            first_file = False
+
         if 'name' in file and file['name']:
-            output['markdown'] += f"\n*(Bridged Message included file: {file['name']}"
-            output['plaintext'] += f"\n(Bridged Message included file: {file['name']}"
+            output['markdown'] += f"*(Bridged Message included file: {file['name']}"
+            output['plaintext'] += f"(Bridged Message included file: {file['name']}"
             if 'title' in file and file['title'] and file['name'] != file['title']:
                 output['markdown'] += f": '{file['title']}'"
                 output['plaintext'] += f": '{file['title']}'"
