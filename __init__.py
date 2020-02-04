@@ -145,19 +145,8 @@ class SlackBridge():
                 me = False
                 attachments = []
                 files = []
-                if (('subtype' in data and data['subtype'] == 'bot_message') or
-                        ('bot_id' in data and 'user' not in data)):
-                    bot_id = data['bot_id']
-                    user_id = await self.get_slack_bot(bot_id,
-                                                       web_client=web_client)
-                    if not user_id:
-                        _LOGGER.debug("no bot found")
-                        return
-                    if user_id == SLACK_BOT_ID:
-                        _LOGGER.debug("oops that's my message!")
-                        return
-                    bot = True
-                elif ('subtype' in data and
+
+                if ('subtype' in data and
                       data['subtype'] == 'message_changed'):
                     data.update(data['message'])
                     edit = True
@@ -165,13 +154,34 @@ class SlackBridge():
                       data['subtype'] == 'message_deleted'):
                     data.update(data['previous_message'])
                     delete = True
+
                 if ('subtype' in data and
                         data['subtype'] == 'message_replied'):
                     return
+
+                # This needs to be below the handling of message_changed and
+                # message_deleted as the message might be replaced with a
+                # bot_message.
+                if (('subtype' in data and data['subtype'] == 'bot_message') or
+                        ('bot_id' in data and 'user' not in data)):
+                    bot_id = data['bot_id']
+                    user_id = await self.get_slack_bot(bot_id,
+                                                       web_client=web_client)
+
+                    if not user_id:
+                        _LOGGER.debug("no bot found")
+                        return
+                    if user_id == SLACK_BOT_ID:
+                        _LOGGER.debug("oops that's my message!")
+                        return
+                    bot = True
+
                 if not bot:
                     user_id = data['user']
+
                 channel_id = data['channel']
                 thread_ts = data['ts']
+
                 user = await self.get_slack_user(user_id,
                                                  web_client=web_client)
                 if not user:
