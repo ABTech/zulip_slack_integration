@@ -194,6 +194,9 @@ class TestSlackReformat(unittest.TestCase):
 
     def test_format_files_from_slack(self):
         # Note: This test is _not_ exhaustive!
+        #
+        # TODO: Figure out some way to mock out the pieces necessary to allow us to test the download/upload
+        # path for files.
 
         # None case
         output = slack_reformat.format_files_from_slack(None, False)
