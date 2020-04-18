@@ -249,7 +249,7 @@ class SlackBridge():
                     needs_leading_newline = \
                         (len(msg) > 0 or len(formatted_attachments['markdown']) > 0)
                     formatted_files = slack_reformat.format_files_from_slack(
-                        files, needs_leading_newline)
+                        files, needs_leading_newline, SLACK_TOKEN, self.zulip_client)
 
                     zulip_message_text = \
                         msg + formatted_attachments['markdown'] + formatted_files['markdown']
@@ -327,6 +327,7 @@ be annoying.",
 
     def send_from_zulip(self, msg):
         _LOGGER.debug('caught zulip message')
+        _LOGGER.debug('JSON: %s' % json.dumps(msg))
         try:
             if (msg['subject'] in PUBLIC_TWO_WAY and
                     msg['sender_short_name'] != ZULIP_BOT_NAME):

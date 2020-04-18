@@ -5,7 +5,10 @@ import datetime
 import logging
 import re
 import sys
+import requests
 import traceback
+
+from io import BytesIO
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -151,9 +154,13 @@ async def format_markdown_links(input_text):
                                replace_markdown_link)
 
 
-def format_files_from_slack(files, needs_leading_newline):
+def format_files_from_slack(files, needs_leading_newline,
+                            slack_bearer_token=None, zulip_client=None):
     '''Given a list of files from the slack API, return both a markdown and plaintext
        string representation of those files.
+
+       Assuming a bearer token and zulip client are provided, the files are mirrored to zulip
+       and those links are included in the markdown result.
 
        This method only uses the passed in message text to determine how to format its output
        caller must append as appropriate.'''
@@ -174,7 +181,24 @@ def format_files_from_slack(files, needs_leading_newline):
             first_file = False
 
         if 'name' in file and file['name']:
-            output['markdown'] += f"*(Bridged Message included file: {file['name']}"
+            rendered_markdown_name = file['name']
+            if slack_bearer_token and zulip_client and 'url_private' in file and file['url_private']:
+                file_private_url = file['url_private']
+                r = requests.get(file_private_url,
+                                 headers={"Authorization": f"Bearer {slack_bearer_token}"})
+                if r.status_code == 200:
+                    uploadable_file = BytesIO(r.content)
+                    uploadable_file.name = file['name']
+
+                    response = zulip_client.upload_file(uploadable_file)
+                    if 'uri' in response and response['uri']:
+                        rendered_markdown_name = f"[{file['name']}]({response['uri']})"
+                    else:
+                        _LOGGER.info('Got bad response when uploading to zulip: {}'.format(response))
+                else:
+                    _LOGGER.info(f"Got code {r.status_code} when fetching {file_private_url} from slack.")
+
+            output['markdown'] += f"*(Bridged Message included file: {rendered_markdown_name}"
             output['plaintext'] += f"(Bridged Message included file: {file['name']}"
             if 'title' in file and file['title'] and file['name'] != file['title']:
                 output['markdown'] += f": '{file['title']}'"

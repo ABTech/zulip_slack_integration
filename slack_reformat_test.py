@@ -194,6 +194,9 @@ class TestSlackReformat(unittest.TestCase):
 
     def test_format_files_from_slack(self):
         # Note: This test is _not_ exhaustive!
+        #
+        # TODO: Figure out some way to mock out the pieces necessary to allow us to test the download/upload
+        # path for files.
 
         # None case
         output = slack_reformat.format_files_from_slack(None, False)
@@ -331,13 +334,17 @@ class TestSlackReformat(unittest.TestCase):
         }
         output = do_await(slack_reformat.format_attachments_from_slack(
             'message', [github_app_attachment], False, _trivial_user_formatter))
+
+        # TODO This test (really, the formatting itself) is time zone sensitive to the TZ of the machine
+        # you are on!  Currently assumes Eastern time.
+
         self.assertEqual(
             output['markdown'],
-            '\n\n```quote\n**ABTech/zulip_slack_integration**\n**Stars**\n1\n**Language**\nPython\n*[ABTech/zulip_slack_integration](https://github.com/ABTech/zulip_slack_integration)* | *Thu May 23 14:35:12 2019*\n```'
+            '\n\n```quote\n**ABTech/zulip_slack_integration**\n**Stars**\n1\n**Language**\nPython\n*[ABTech/zulip_slack_integration](https://github.com/ABTech/zulip_slack_integration)* | *Thu May 23 17:35:12 2019*\n```'
         )
         self.assertEqual(
             output['plaintext'],
-            '\n\nABTech/zulip_slack_integration\nStars\n1\nLanguage\nPython\n[ABTech/zulip_slack_integration](https://github.com/ABTech/zulip_slack_integration) | Thu May 23 14:35:12 2019\n'
+            '\n\nABTech/zulip_slack_integration\nStars\n1\nLanguage\nPython\n[ABTech/zulip_slack_integration](https://github.com/ABTech/zulip_slack_integration) | Thu May 23 17:35:12 2019\n'
         )
 
 if __name__ == '__main__':
