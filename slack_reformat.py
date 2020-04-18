@@ -5,7 +5,6 @@ import datetime
 import logging
 import re
 import sys
-import requests
 import traceback
 
 from io import BytesIO
@@ -153,9 +152,9 @@ async def format_markdown_links(input_text):
                                _SLACK_LINK_MATCH,
                                replace_markdown_link)
 
-
-def format_files_from_slack(files, needs_leading_newline,
-                            slack_bearer_token=None, zulip_client=None):
+async def format_files_from_slack(files, needs_leading_newline,
+                                  aiohttp_session=None,
+                                  slack_bearer_token=None, zulip_client=None):
     '''Given a list of files from the slack API, return both a markdown and plaintext
        string representation of those files.
 
@@ -182,15 +181,19 @@ def format_files_from_slack(files, needs_leading_newline,
 
         if 'name' in file and file['name']:
             rendered_markdown_name = file['name']
-            if slack_bearer_token and zulip_client and 'url_private' in file and file['url_private']:
+            if (aiohttp_session and slack_bearer_token and zulip_client
+                and 'url_private' in file and file['url_private']):
                 file_private_url = file['url_private']
-                r = requests.get(file_private_url,
-                                 headers={"Authorization": f"Bearer {slack_bearer_token}"})
-                if r.status_code == 200:
-                    if file_private_url != r.url:
-                        # we were redirected!
-                        _LOGGER.info(
-                            f'Apparent slack redirect from {file_private_url} to {r.url} when bridging file.  Skipping.')
+                r = await aiohttp_session.get(file_private_url,
+                                              headers={"Authorization": f"Bearer {slack_bearer_token}"})
+                if r.status == 200:
+                    uploadable_file = BytesIO(await r.content.read())
+                    uploadable_file.name = file['name']
+
+                    # Note: Like other zulip methods, this will block and isn't async.
+                    response = zulip_client.upload_file(uploadable_file)
+                    if 'uri' in response and response['uri']:
+                        rendered_markdown_name = f"[{file['name']}]({response['uri']})"
                     else:
                         uploadable_file = BytesIO(r.content)
                         uploadable_file.name = file['name']

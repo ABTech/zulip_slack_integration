@@ -1,3 +1,4 @@
+aiohttp==3.6.2
 redis==3.2.1
 requests==2.22.0
 slackclient==2.5.0

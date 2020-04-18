@@ -1,3 +1,4 @@
+import aiohttp
 import asyncio
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import datetime
@@ -248,8 +249,12 @@ class SlackBridge():
                     # Assumes that both markdown and plaintext need a newline together.
                     needs_leading_newline = \
                         (len(msg) > 0 or len(formatted_attachments['markdown']) > 0)
-                    formatted_files = slack_reformat.format_files_from_slack(
-                        files, needs_leading_newline, SLACK_TOKEN, self.zulip_client)
+
+                    # TODO: We might not want a new client session for every message.
+                    async with aiohttp.ClientSession() as session:
+                        formatted_files = await slack_reformat.format_files_from_slack(
+                            files, needs_leading_newline,
+                            session, SLACK_TOKEN, self.zulip_client)
 
                     zulip_message_text = \
                         msg + formatted_attachments['markdown'] + formatted_files['markdown']
