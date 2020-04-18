@@ -229,18 +229,6 @@ class SlackBridge():
                     if 'files' in data:
                         files = data['files']
 
-                    # TODO: When real support for 'files' is implemented,
-                    # it should probably be in the format_attachments_for_zulip
-                    # call.
-
-            #        if 'files' in data:
-            #            for file in data['files']:
-            #                web_client.files_sharedPublicURL(id=file['id'])
-            #                if msg == '':
-            #                    msg = file['permalink_public']
-            #                else:
-            #                    msg += '\n' + file['permalink_public']
-
                     formatted_attachments = \
                         await slack_reformat.format_attachments_from_slack(
                             msg, attachments,
