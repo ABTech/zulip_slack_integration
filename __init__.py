@@ -254,7 +254,8 @@ class SlackBridge():
                     async with aiohttp.ClientSession() as session:
                         formatted_files = await slack_reformat.format_files_from_slack(
                             files, needs_leading_newline,
-                            session, SLACK_TOKEN, self.zulip_client)
+                            session, SLACK_TOKEN,
+                            ZULIP_URL, aiohttp.BasicAuth(ZULIP_BOT_EMAIL, ZULIP_API_KEY))
 
                     zulip_message_text = \
                         msg + formatted_attachments['markdown'] + formatted_files['markdown']
