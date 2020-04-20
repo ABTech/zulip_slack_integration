@@ -191,29 +191,34 @@ async def format_files_from_slack(files, needs_leading_newline,
                 r = await aiohttp_session.get(file_private_url,
                                               headers={"Authorization": f"Bearer {slack_bearer_token}"})
                 if r.status == 200:
-                    uploadable_file = BytesIO(await r.content.read())
-                    uploadable_file.name = file['name']
-
-                    file_dict = {'file': uploadable_file}
-
-                    # Because we want to use async io for this potentially long running request,
-                    # we can't use the zulip client library.  Instead, REST/OpenAPI it is.
-                    upload_response = await aiohttp_session.post(
-                        f'{zulip_url}/api/v1/user_uploads',
-                        data=file_dict,
-                        auth=aiohttp_zulip_basic_auth)
-
-                    response = {}
-                    if upload_response.status == 200:
-                        response = await upload_response.json()
-                    else:
+                    if str(r.url) != file_private_url:
+                        # we were redirected!
                         _LOGGER.info(
-                            f"Upload to Zulip Failed for {file['name']}.  Code {upload_response.status}.")
-
-                    if upload_response.status == 200 and 'uri' in response and response['uri']:
-                        rendered_markdown_name = f"[{file['name']}]({response['uri']})"
+                            f'Apparent slack redirect from {file_private_url} to {str(r.url)} when bridging file.  Skipping.')
                     else:
-                        _LOGGER.info(f"Got bad response uploading to zulip for {file['name']}..  Body: {await upload_response.text()}")
+                        uploadable_file = BytesIO(await r.content.read())
+                        uploadable_file.name = file['name']
+
+                        file_dict = {'file': uploadable_file}
+
+                        # Because we want to use async io for this potentially long running request,
+                        # we can't use the zulip client library.  Instead, REST/OpenAPI it is.
+                        upload_response = await aiohttp_session.post(
+                            f'{zulip_url}/api/v1/user_uploads',
+                            data=file_dict,
+                            auth=aiohttp_zulip_basic_auth)
+
+                        response = {}
+                        if upload_response.status == 200:
+                            response = await upload_response.json()
+                        else:
+                            _LOGGER.info(
+                                f"Upload to Zulip Failed for {file['name']}.  Code {upload_response.status}.")
+
+                        if upload_response.status == 200 and 'uri' in response and response['uri']:
+                            rendered_markdown_name = f"[{file['name']}]({response['uri']})"
+                        else:
+                            _LOGGER.info(f"Got bad response uploading to zulip for {file['name']}..  Body: {await upload_response.text()}")
                 else:
                     _LOGGER.info(f"Got code {r.status_code} when fetching {file_private_url} from slack.")
 
