@@ -187,14 +187,19 @@ def format_files_from_slack(files, needs_leading_newline,
                 r = requests.get(file_private_url,
                                  headers={"Authorization": f"Bearer {slack_bearer_token}"})
                 if r.status_code == 200:
-                    uploadable_file = BytesIO(r.content)
-                    uploadable_file.name = file['name']
-
-                    response = zulip_client.upload_file(uploadable_file)
-                    if 'uri' in response and response['uri']:
-                        rendered_markdown_name = f"[{file['name']}]({response['uri']})"
+                    if file_private_url != r.url:
+                        # we were redirected!
+                        _LOGGER.info(
+                            f'Apparent slack redirect from {file_private_url} to {r.url} when bridging file.  Skipping.')
                     else:
-                        _LOGGER.info('Got bad response when uploading to zulip: {}'.format(response))
+                        uploadable_file = BytesIO(r.content)
+                        uploadable_file.name = file['name']
+
+                        response = zulip_client.upload_file(uploadable_file)
+                        if 'uri' in response and response['uri']:
+                            rendered_markdown_name = f"[{file['name']}]({response['uri']})"
+                        else:
+                            _LOGGER.info('Got bad response when uploading to zulip: {}'.format(response))
                 else:
                     _LOGGER.info(f"Got code {r.status_code} when fetching {file_private_url} from slack.")
 
