@@ -330,7 +330,7 @@ be annoying.",
         _LOGGER.debug('JSON: %s' % json.dumps(msg))
         try:
             if (msg['subject'] in PUBLIC_TWO_WAY and
-                    msg['sender_short_name'] != ZULIP_BOT_NAME):
+                    msg['sender_email'] != ZULIP_BOT_EMAIL):
                 _LOGGER.debug('good to send zulip message to slack')
                 asyncio.ensure_future(
                     self.slack_web_client.chat_postMessage(
