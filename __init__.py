@@ -1,3 +1,4 @@
+import aiohttp
 import asyncio
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import datetime
@@ -228,18 +229,6 @@ class SlackBridge():
                     if 'files' in data:
                         files = data['files']
 
-                    # TODO: When real support for 'files' is implemented,
-                    # it should probably be in the format_attachments_for_zulip
-                    # call.
-
-            #        if 'files' in data:
-            #            for file in data['files']:
-            #                web_client.files_sharedPublicURL(id=file['id'])
-            #                if msg == '':
-            #                    msg = file['permalink_public']
-            #                else:
-            #                    msg += '\n' + file['permalink_public']
-
                     formatted_attachments = \
                         await slack_reformat.format_attachments_from_slack(
                             msg, attachments,
@@ -248,8 +237,13 @@ class SlackBridge():
                     # Assumes that both markdown and plaintext need a newline together.
                     needs_leading_newline = \
                         (len(msg) > 0 or len(formatted_attachments['markdown']) > 0)
-                    formatted_files = slack_reformat.format_files_from_slack(
-                        files, needs_leading_newline, SLACK_TOKEN, self.zulip_client)
+
+                    # TODO: We might not want a new client session for every message.
+                    async with aiohttp.ClientSession() as session:
+                        formatted_files = await slack_reformat.format_files_from_slack(
+                            files, needs_leading_newline,
+                            session, SLACK_TOKEN,
+                            ZULIP_URL, aiohttp.BasicAuth(ZULIP_BOT_EMAIL, ZULIP_API_KEY))
 
                     zulip_message_text = \
                         msg + formatted_attachments['markdown'] + formatted_files['markdown']

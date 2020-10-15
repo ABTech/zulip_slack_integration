@@ -5,7 +5,6 @@ import datetime
 import logging
 import re
 import sys
-import requests
 import traceback
 
 from io import BytesIO
@@ -153,14 +152,17 @@ async def format_markdown_links(input_text):
                                _SLACK_LINK_MATCH,
                                replace_markdown_link)
 
-
-def format_files_from_slack(files, needs_leading_newline,
-                            slack_bearer_token=None, zulip_client=None):
+async def format_files_from_slack(files, needs_leading_newline,
+                                  aiohttp_session=None,
+                                  slack_bearer_token=None,
+                                  zulip_url=None,
+                                  aiohttp_zulip_basic_auth=None):
     '''Given a list of files from the slack API, return both a markdown and plaintext
        string representation of those files.
 
-       Assuming a bearer token and zulip client are provided, the files are mirrored to zulip
-       and those links are included in the markdown result.
+       Assuming a aiohttp Client Session, slack bearer token, root zulip URL, and an
+       aiohttp.BasicAuth for zulip are provided, the files are mirrored to zulip and
+       those links are included in the markdown result (but not the plaintext result).
 
        This method only uses the passed in message text to determine how to format its output
        caller must append as appropriate.'''
@@ -182,24 +184,41 @@ def format_files_from_slack(files, needs_leading_newline,
 
         if 'name' in file and file['name']:
             rendered_markdown_name = file['name']
-            if slack_bearer_token and zulip_client and 'url_private' in file and file['url_private']:
+            if (aiohttp_session and slack_bearer_token
+                and zulip_url and aiohttp_zulip_basic_auth
+                and 'url_private' in file and file['url_private']):
                 file_private_url = file['url_private']
-                r = requests.get(file_private_url,
-                                 headers={"Authorization": f"Bearer {slack_bearer_token}"})
-                if r.status_code == 200:
-                    if file_private_url != r.url:
+                r = await aiohttp_session.get(file_private_url,
+                                              headers={"Authorization": f"Bearer {slack_bearer_token}"})
+                if r.status == 200:
+                    if str(r.url) != file_private_url:
                         # we were redirected!
                         _LOGGER.info(
-                            f'Apparent slack redirect from {file_private_url} to {r.url} when bridging file.  Skipping.')
+                            f'Apparent slack redirect from {file_private_url} to {str(r.url)} when bridging file.  Skipping.')
                     else:
-                        uploadable_file = BytesIO(r.content)
+                        uploadable_file = BytesIO(await r.content.read())
                         uploadable_file.name = file['name']
 
-                        response = zulip_client.upload_file(uploadable_file)
-                        if 'uri' in response and response['uri']:
+                        file_dict = {'file': uploadable_file}
+
+                        # Because we want to use async io for this potentially long running request,
+                        # we can't use the zulip client library.  Instead, REST/OpenAPI it is.
+                        upload_response = await aiohttp_session.post(
+                            f'{zulip_url}/api/v1/user_uploads',
+                            data=file_dict,
+                            auth=aiohttp_zulip_basic_auth)
+
+                        response = {}
+                        if upload_response.status == 200:
+                            response = await upload_response.json()
+                        else:
+                            _LOGGER.info(
+                                f"Upload to Zulip Failed for {file['name']}.  Code {upload_response.status}.")
+
+                        if upload_response.status == 200 and 'uri' in response and response['uri']:
                             rendered_markdown_name = f"[{file['name']}]({response['uri']})"
                         else:
-                            _LOGGER.info('Got bad response when uploading to zulip: {}'.format(response))
+                            _LOGGER.info(f"Got bad response uploading to zulip for {file['name']}..  Body: {await upload_response.text()}")
                 else:
                     _LOGGER.info(f"Got code {r.status_code} when fetching {file_private_url} from slack.")
 
