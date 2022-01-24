@@ -1,4 +1,4 @@
-local_secrets.yml
+local_secrets.py
 
 # From https://github.com/github/gitignore/blob/c1faae44aebe587bbb90d60e21ca928e0116e8d4/Python.gitignore
 

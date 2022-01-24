@@ -17,7 +17,17 @@ import zulip
 
 import slack_reformat
 
-import local_secrets
+from local_secrets import (ZULIP_BOT_NAME, ZULIP_BOT_EMAIL,
+                           ZULIP_API_KEY, ZULIP_URL,
+                           SLACK_BOT_ID, SLACK_TOKEN,
+                           PUBLIC_TWO_WAY, PUBLIC_TWO_WAY_STREAM,
+                           REDIS_HOSTNAME, REDIS_PORT,
+                           REDIS_PASSWORD, REDIS_PREFIX,
+                           SLACK_EDIT_UPDATE_ZULIP_TTL, SLACK_ERR_CHANNEL,
+                           GROUPME_ENABLE, GROUPME_TWO_WAY,
+                           SSL_CERT_CHAIN_PATH, SSL_CERT_KEY_PATH,
+                           ZULIP_LOG_ENABLE,
+                           ZULIP_LOG_PUBLIC_STREAM, ZULIP_LOG_PRIVATE_STREAM)
 
 REDIS_USERS = REDIS_PREFIX + ':users:'
 REDIS_BOTS = REDIS_PREFIX + ':bots:'
