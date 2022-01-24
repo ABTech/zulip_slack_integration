@@ -3,7 +3,7 @@ Description=A bridge between zulip and slack (%i)
 After=network.target
 
 [Service]
-User=deploy-abtech-zulip_slack_integration
+User=deploy-abtech-zulip_slack_integ
 Restart=on-failure
 WorkingDirectory=/srv/abtech-zulip_slack_integration/%i/repo
 ExecStart=/srv/abtech-zulip_slack_integration/%i/venv/bin/python3 /srv/abtech-zulip_slack_integration/%i/repo/__init__.py
