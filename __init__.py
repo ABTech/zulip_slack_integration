@@ -17,16 +17,16 @@ import zulip
 
 import slack_reformat
 
-import secrets
+import local_secrets
 
-REDIS_USERS = secrets.REDIS_PREFIX + ':users:'
-REDIS_BOTS = secrets.REDIS_PREFIX + ':bots:'
-REDIS_CHANNELS = secrets.REDIS_PREFIX + ':channels:'
-REDIS_CHANNELS_BY_NAME = secrets.REDIS_PREFIX + ':channels.by.name:'
+REDIS_USERS = REDIS_PREFIX + ':users:'
+REDIS_BOTS = REDIS_PREFIX + ':bots:'
+REDIS_CHANNELS = REDIS_PREFIX + ':channels:'
+REDIS_CHANNELS_BY_NAME = REDIS_PREFIX + ':channels.by.name:'
 REDIS_MSG_SLACK_TO_ZULIP = {
-    secrets.PUBLIC_TWO_WAY_STREAM:    secrets.REDIS_PREFIX + ':msg.slack.to.zulip.pub:',
-    secrets.ZULIP_LOG_PUBLIC_STREAM:  secrets.REDIS_PREFIX + ':msg.slack.to.zulip:',
-    secrets.ZULIP_LOG_PRIVATE_STREAM: secrets.REDIS_PREFIX + ':msg.slack.to.zulip.priv:'
+    PUBLIC_TWO_WAY_STREAM:    REDIS_PREFIX + ':msg.slack.to.zulip.pub:',
+    ZULIP_LOG_PUBLIC_STREAM:  REDIS_PREFIX + ':msg.slack.to.zulip:',
+    ZULIP_LOG_PRIVATE_STREAM: REDIS_PREFIX + ':msg.slack.to.zulip.priv:'
 }
 
 GROUP_UPDATES = ['channel_archive', 'channel_join', 'channel_leave',
@@ -41,9 +41,9 @@ logging.basicConfig(level=LOGLEVEL)
 
 _LOGGER = logging.getLogger(__name__)
 
-if secrets.GROUPME_ENABLE:
+if GROUPME_ENABLE:
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    context.load_cert_chain(secrets.SSL_CERT_CHAIN_PATH, secrets.SSL_CERT_KEY_PATH)
+    context.load_cert_chain(SSL_CERT_CHAIN_PATH, SSL_CERT_KEY_PATH)
 
 class SlackHandler(logging.StreamHandler):
     def __init__(self, web_client, event_loop, channel_id):
@@ -92,16 +92,16 @@ class SlackBridge():
 
         _LOGGER.debug('connecting to redis')
         self.redis = redis.Redis(
-            host=secrets.REDIS_HOSTNAME,
-            port=secrets.REDIS_PORT,
-            password=secrets.REDIS_PASSWORD,
+            host=REDIS_HOSTNAME,
+            port=REDIS_PORT,
+            password=REDIS_PASSWORD,
             charset="utf-8",
             decode_responses=True)
 
         _LOGGER.debug('connecting to zulip')
-        self.zulip_client = zulip.Client(email=secrets.ZULIP_BOT_EMAIL,
-                                         api_key=secrets.ZULIP_API_KEY,
-                                         site=secrets.ZULIP_URL)
+        self.zulip_client = zulip.Client(email=ZULIP_BOT_EMAIL,
+                                         api_key=ZULIP_API_KEY,
+                                         site=ZULIP_URL)
         self.zulip_thread = threading.Thread(target=self.run_zulip_listener)
         self.zulip_thread.setDaemon(True)
         self.zulip_thread.start()
@@ -112,10 +112,10 @@ class SlackBridge():
         self.user_formatter = slack_reformat.SlackUserFormatter(
             lambda user_id: self.get_slack_user(user_id, web_client=self.slack_web_client))
 
-        if secrets.GROUPME_ENABLE:
+        if GROUPME_ENABLE:
             _LOGGER.debug('connecting to groupmes')
             self.groupme_threads = {}
-            for channel, conf in secrets.GROUPME_TWO_WAY.items():
+            for channel, conf in GROUPME_TWO_WAY.items():
                 self.groupme_threads[channel] = threading.Thread(
                     target=self.run_groupme_listener, args=(channel, conf))
                 self.groupme_threads[channel].setDaemon(True)
@@ -161,7 +161,7 @@ class SlackBridge():
                     if not user_id:
                         _LOGGER.debug("no bot found")
                         return
-                    if user_id == secrets.SLACK_BOT_ID:
+                    if user_id == SLACK_BOT_ID:
                         _LOGGER.debug("oops that's my message!")
                         return
                     bot = True
@@ -239,12 +239,12 @@ class SlackBridge():
                     needs_leading_newline = \
                         (len(msg) > 0 or len(formatted_attachments['markdown']) > 0)
                     formatted_files = slack_reformat.format_files_from_slack(
-                        files, needs_leading_newline, secrets.SLACK_TOKEN, self.zulip_client)
+                        files, needs_leading_newline, SLACK_TOKEN, self.zulip_client)
 
                     zulip_message_text = \
                         msg + formatted_attachments['markdown'] + formatted_files['markdown']
 
-                    if channel_name in secrets.PUBLIC_TWO_WAY:
+                    if channel_name in PUBLIC_TWO_WAY:
                         self.send_to_zulip(
                             channel_name, zulip_message_text, user=user,
                             send_public=True, slack_id=msg_id,
@@ -252,16 +252,16 @@ class SlackBridge():
 
                     # If we are not sending publicly, then we are sending for
                     # logging purposes, which might be disabled.
-                    if secrets.ZULIP_LOG_ENABLE:
+                    if ZULIP_LOG_ENABLE:
                         self.send_to_zulip(
                             channel_name, zulip_message_text, user=user,
                             slack_id=msg_id, edit=edit,
                             delete=delete, me=me, private=private)
 
                     # If groupme is enabled, then send there.  Note that this
-                    # will also filter to only the secrets.GROUPME_TWO_WAY channels
+                    # will also filter to only the GROUPME_TWO_WAY channels
                     # within the send_to_groupme call.
-                    if secrets.GROUPME_ENABLE:
+                    if GROUPME_ENABLE:
                         groupme_message_text = \
                             msg + formatted_attachments['plaintext'] + formatted_files['plaintext']
 
@@ -299,17 +299,17 @@ be annoying.",
 
         _LOGGER.debug('connecting to slack')
         self.slack_loop = asyncio.new_event_loop()
-        self.slack_rtm_client = slack.RTMClient(token=secrets.SLACK_TOKEN,
+        self.slack_rtm_client = slack.RTMClient(token=SLACK_TOKEN,
                                                 run_async=True,
                                                 loop=self.slack_loop)
-        self.slack_web_client = slack.WebClient(token=secrets.SLACK_TOKEN,
+        self.slack_web_client = slack.WebClient(token=SLACK_TOKEN,
                                                 run_async=True,
                                                 loop=self.slack_loop)
         self.slack_log_format = '%(asctime)s %(name)-12s %(levelname)-8s %(message)s'
         self.slack_log_formatter = logging.Formatter(self.slack_log_format)
         self.slack_logger = SlackHandler(self.slack_web_client,
                                          self.slack_loop,
-                                         secrets.SLACK_ERR_CHANNEL)
+                                         SLACK_ERR_CHANNEL)
         self.slack_logger.setLevel(logging.INFO)
         self.slack_logger.setFormatter(self.slack_log_formatter)
         logging.getLogger('').addHandler(self.slack_logger)
@@ -319,8 +319,8 @@ be annoying.",
         _LOGGER.debug('caught zulip message')
         _LOGGER.debug('JSON: %s' % json.dumps(msg))
         try:
-            if (msg['subject'] in secrets.PUBLIC_TWO_WAY and
-                    msg['sender_email'] != secrets.ZULIP_BOT_EMAIL):
+            if (msg['subject'] in PUBLIC_TWO_WAY and
+                    msg['sender_email'] != ZULIP_BOT_EMAIL):
                 _LOGGER.debug('good to send zulip message to slack')
                 asyncio.ensure_future(
                     self.slack_web_client.chat_postMessage(
@@ -330,7 +330,7 @@ be annoying.",
                         mrkdwn=True
                         # thread_ts=thread_ts
                     ), loop=self.slack_loop)
-                if secrets.GROUPME_ENABLE:
+                if GROUPME_ENABLE:
                     self.send_to_groupme(msg['subject'], msg['content'],
                                          user=msg['sender_full_name'])
         except:
@@ -369,7 +369,7 @@ be annoying.",
                     mrkdwn=True
                     # thread_ts=thread_ts
                 ), loop=self.slack_loop)
-            if channel in secrets.PUBLIC_TWO_WAY:
+            if channel in PUBLIC_TWO_WAY:
                 self.send_to_zulip(channel, message_text, user=user,
                                    send_public=True)
             channel_id = self.get_slack_channel_by_name(channel)
@@ -530,11 +530,11 @@ my records to use your new name when I forward messages to Zulip for you.",
             elif user is not None and me:
                 user_prefix = '**' + user + '** '
 
-            to = secrets.ZULIP_LOG_PUBLIC_STREAM
+            to = ZULIP_LOG_PUBLIC_STREAM
             if send_public:
-                to = secrets.PUBLIC_TWO_WAY_STREAM
+                to = PUBLIC_TWO_WAY_STREAM
             elif private:
-                to = secrets.ZULIP_LOG_PRIVATE_STREAM
+                to = ZULIP_LOG_PRIVATE_STREAM
             if edit and slack_id:
                 redis_key = REDIS_MSG_SLACK_TO_ZULIP[to] + slack_id
                 zulip_id = self.redis.get(redis_key)
@@ -595,7 +595,7 @@ my records to use your new name when I forward messages to Zulip for you.",
                     return
                 redis_key = REDIS_MSG_SLACK_TO_ZULIP[to] + slack_id
                 self.redis.set(redis_key, sent['id'],
-                               ex=secrets.SLACK_EDIT_UPDATE_ZULIP_TTL)
+                               ex=SLACK_EDIT_UPDATE_ZULIP_TTL)
         except:
             e = sys.exc_info()
             exc_type, exc_value, exc_traceback = e
@@ -608,11 +608,11 @@ my records to use your new name when I forward messages to Zulip for you.",
                         delete=False, me=False):
         try:
             # Check for reasons to not send to groupme.
-            if not secrets.GROUPME_ENABLE:
+            if not GROUPME_ENABLE:
                 _LOGGER.debug('attempting to send to groupme but groupme is disabled')
                 return
-            elif subject not in secrets.GROUPME_TWO_WAY:
-                _LOGGER.debug('aborting send to groupme outside of secrets.GROUPME_TWO_WAY')
+            elif subject not in GROUPME_TWO_WAY:
+                _LOGGER.debug('aborting send to groupme outside of GROUPME_TWO_WAY')
                 return
             elif edit or delete:
                 _LOGGER.debug('aborting send due to edit or delete in send_to_groupme')
@@ -627,7 +627,7 @@ my records to use your new name when I forward messages to Zulip for you.",
             elif user is not None and me:
                 user_prefix = user + ' '
 
-            to = secrets.GROUPME_TWO_WAY[subject]
+            to = GROUPME_TWO_WAY[subject]
             send_data = {
                 'bot_id': to['BOT_ID'],
                 'text': user_prefix + msg
