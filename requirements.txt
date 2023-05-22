@@ -1,4 +1,4 @@
 redis==3.2.1
-requests==2.22.0
+requests==2.31.0
 slackclient==2.8.0
 zulip==0.8.1
